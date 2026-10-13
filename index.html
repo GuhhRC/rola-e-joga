@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rola e Joga!</title>
+<meta name="description" content="Escolha um gênero ou cole seu perfil da Steam, gire a roleta e jogue o que ela mandar.">
+<meta name="theme-color" content="#0a0a0a">
+<meta property="og:title" content="Rola e Joga!">
+<meta property="og:description" content="Gire a roleta e jogue o que ela mandar. Jogos da Steam por gênero ou da sua própria biblioteca.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0a0a'/%3E%3Ccircle cx='16' cy='18' r='10' fill='none' stroke='%232eea7a' stroke-width='2.4'/%3E%3Cpath d='M16 8v20M7.3 13l17.4 10M24.7 13L7.3 23' stroke='%232eea7a' stroke-width='1.2' opacity='.55'/%3E%3Ccircle cx='16' cy='18' r='2.4' fill='%232eea7a'/%3E%3Cpath d='M12 2h8l-4 6z' fill='%232eea7a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="icon-btn" id="btnBack" aria-label="Voltar" hidden>&larr;</button>
+      <div class="brand" aria-label="Rola e Joga!">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="8.6" fill="none" stroke="#2eea7a" stroke-width="1.8"/><path d="M12 5.4v17.2M4.55 9.7l14.9 8.6M19.45 9.7l-14.9 8.6" stroke="#2eea7a" stroke-width="1" opacity=".55" fill="none"/><circle cx="12" cy="14" r="2" fill="#2eea7a"/><path d="M8.6 1.4h6.8L12 7.6z" fill="#2eea7a"/></svg>
+        <span class="word">ROLA<i>e</i><b>JOGA!</b></span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="btnSound" aria-label="Som ligado/desligado" title="Som">SOM</button>
+      <button class="icon-btn" id="btnLists" aria-label="Histórico e listas" title="Listas">LISTAS</button>
+      <button class="icon-btn" id="btnRec" aria-label="Modo gravação" title="Modo gravação">REC</button>
+    </div>
+  </header>
+
+  <main id="view" class="view" aria-live="polite"></main>
+
+  <div class="modal" id="modal" hidden></div>
+  <aside class="drawer" id="drawer" hidden></aside>
+  <button class="rec-exit" id="recExit" hidden>sair do modo gravação</button>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

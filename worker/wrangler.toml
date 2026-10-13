@@ -1,0 +1,10 @@
+name = "rola-e-joga-api"
+main = "index.js"
+compatibility_date = "2024-09-01"
+
+[vars]
+# Depois de publicar o site, troque pelo endereço dele (ex.: "https://rolaejoga.com.br").
+# Vários sites: separe por vírgula. "*" libera para qualquer site.
+ALLOWED_ORIGIN = "*"
+
+# A chave da Steam NÃO fica aqui. Guarde com:  npx wrangler secret put STEAM_API_KEY

@@ -1,0 +1,1 @@
+# Preencha ads.client em config.js e rode "npm run pages" para gerar a linha do AdSense.
