@@ -14,7 +14,7 @@ window.ROLA_CONFIG = {
 
   // Endereço do Worker da Cloudflare (busca de biblioteca por perfil), sem barra no final.
   // Ex.: 'https://rola-e-joga-api.SEU-USUARIO.workers.dev'. Vazio = busca desativada.
-  apiUrl: '',
+  apiUrl: 'https://rola-e-joga-api.rola-e-joga.workers.dev/',
 
   // Anúncios. Ficam desligados até você ter a conta do AdSense aprovada.
   ads: {
