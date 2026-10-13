@@ -926,34 +926,45 @@ function wrapLines(x, text, maxW, maxLines) {
 // logo: anel, raios, miolo e ponteiro (mesmo desenho do cabeçalho)
 function drawLogo(x, cx, cy, r) {
   x.save();
-  x.lineCap = 'round';
-  x.strokeStyle = '#2eea7a';
+  x.lineJoin = 'round';
   x.fillStyle = '#2eea7a';
-  x.lineWidth = r * 0.14;
+  x.strokeStyle = '#2eea7a';
+  // fatias alternadas (12 fatias, as pares preenchidas)
+  x.globalAlpha = 0.85;
+  for (let i = 0; i < 12; i += 2) {
+    const a0 = -Math.PI / 2 + (i * TAU) / 12;
+    x.beginPath();
+    x.moveTo(cx, cy);
+    x.arc(cx, cy, r, a0, a0 + TAU / 12);
+    x.closePath();
+    x.fill();
+  }
+  x.globalAlpha = 1;
+  // anel com brilho
   x.shadowColor = 'rgba(46,234,122,0.6)';
   x.shadowBlur = r * 0.5;
+  x.lineWidth = r * 0.17;
   x.beginPath();
   x.arc(cx, cy, r, 0, TAU);
   x.stroke();
   x.shadowBlur = 0;
-  x.globalAlpha = 0.55;
-  x.lineWidth = r * 0.08;
-  for (let i = 0; i < 3; i++) {
-    const a = (Math.PI / 3) * i - Math.PI / 2;
-    x.beginPath();
-    x.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-    x.lineTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r);
-    x.stroke();
-  }
-  x.globalAlpha = 1;
+  // miolo
+  x.fillStyle = '#0a0a0a';
+  x.lineWidth = r * 0.13;
   x.beginPath();
-  x.arc(cx, cy, r * 0.17, 0, TAU);
+  x.arc(cx, cy, r * 0.27, 0, TAU);
   x.fill();
+  x.stroke();
+  // ponteiro apontando para dentro da roda, com contorno escuro
+  x.fillStyle = '#2eea7a';
+  x.strokeStyle = '#0a0a0a';
+  x.lineWidth = r * 0.14;
   x.beginPath();
-  x.moveTo(cx - r * 0.34, cy - r * 1.28);
-  x.lineTo(cx + r * 0.34, cy - r * 1.28);
-  x.lineTo(cx, cy - r * 0.8);
+  x.moveTo(cx - r * 0.39, cy - r * 1.32);
+  x.lineTo(cx + r * 0.39, cy - r * 1.32);
+  x.lineTo(cx, cy - r * 0.5);
   x.closePath();
+  x.stroke();
   x.fill();
   x.restore();
 }
