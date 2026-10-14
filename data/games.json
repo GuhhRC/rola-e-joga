@@ -1,4 +1,4 @@
-{"meta":{"updatedAt":"2026-10-12T02:17:54.681Z","count":314,"genreCounts":{"coop":60,"mundo-aberto":51,"sobrevivencia":35,"terror":32,"aventura":74,"indie":120,"plataforma":33,"acao":106,"cozy":18,"estrategia":40,"roguelike":23,"simulacao":39,"corrida":16,"metroidvania":15,"puzzle":30,"fps":36,"soulslike":17,"rpg":64},"source":"seed"},"games":[
+{"meta":{"source":"seed","updatedAt":"2026-10-14T08:12:55.885Z","count":314,"genreCounts":{"coop":60,"mundo-aberto":51,"sobrevivencia":35,"terror":32,"aventura":74,"indie":120,"plataforma":33,"acao":106,"cozy":18,"estrategia":40,"roguelike":23,"simulacao":39,"corrida":16,"metroidvania":15,"puzzle":30,"fps":36,"soulslike":17,"rpg":64},"detailed":0},"games":[
 {"id":251570,"name":"7 Days to Die","genres":["coop","mundo-aberto","sobrevivencia","terror"]},
 {"id":253230,"name":"A Hat in Time","genres":["aventura","indie","plataforma"]},
 {"id":752590,"name":"A Plague Tale: Innocence","genres":["acao","aventura"]},
