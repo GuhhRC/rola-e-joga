@@ -2,8 +2,14 @@ name: Atualizar lista de jogos
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
-  workflow_dispatch:
+    - cron: '0 6 * * *' # todo dia, 06:00 UTC (03:00 em Brasília)
+  workflow_dispatch: # botão "Run workflow" para rodar na hora
+    inputs:
+      modo:
+        description: 'completo = busca na Steam (~1h15). teste-rapido = só testa o salvamento (segundos)'
+        type: choice
+        default: completo
+        options: [completo, teste-rapido]
 
 permissions:
   contents: write
@@ -15,19 +21,34 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Buscar jogos na Steam
-        run: node scripts/update.mjs
+        run: |
+          if [ "${{ inputs.modo }}" = "teste-rapido" ]; then node scripts/update.mjs --seed-only; else node scripts/update.mjs; fi
       - name: Regenerar páginas e guias
         run: node scripts/build-pages.mjs
+      - name: Guardar cópia dos dados (segurança)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dados-jogos
+          path: data
+          retention-days: 7
       - name: Salvar se mudou
+        if: always() # salva o que foi buscado mesmo se algum passo anterior falhar
         run: |
           git config user.name "rola-e-joga-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/games.json guias sobre.html privacidade.html sitemap.xml robots.txt ads.txt
-          git diff --cached --quiet || (git commit -m "Atualiza lista de jogos e guias" && git push)
+          for f in data guias sobre.html privacidade.html sitemap.xml robots.txt ads.txt; do
+            [ -e "$f" ] && git add -A "$f"
+          done
+          git status --short | head -20
+          if git diff --cached --quiet; then echo "nada mudou"; else
+            git commit -m "Atualiza lista de jogos e guias"
+            git push || { echo "ERRO AO ENVIAR: confira Settings > Actions > General > Workflow permissions = Read and write"; exit 1; }
+          fi
