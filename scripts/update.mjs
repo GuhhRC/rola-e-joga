@@ -237,12 +237,13 @@ export async function main(argv = process.argv.slice(2)) {
 
   const meta = { ...(prev.meta || {}), source: 'steamspy+steam' };
 
-  /* 1) descoberta */
-  const due = !meta.discoveredAt || (Date.now() - new Date(meta.discoveredAt)) / 864e5 >= S.discoverEveryDays;
-  if (argv.includes('--discover') || due) {
-    log('== descoberta (SteamSpy) ==');
-    let ok = 0;
-    for (const [i, genre] of genres.entries()) {
+  /* 1) descoberta (por gênero: quem falhou é tentado de novo na próxima execução) */
+  const force = argv.includes('--discover');
+  meta.genreAt = { ...(meta.genreAt || {}) };
+  const dueGenres = genres.filter((g) => force || !meta.genreAt[g.id] || (Date.now() - new Date(meta.genreAt[g.id])) / 864e5 >= S.discoverEveryDays);
+  if (dueGenres.length) {
+    log(`== descoberta (SteamSpy): ${dueGenres.length} gêneros ==`);
+    for (const [i, genre] of dueGenres.entries()) {
       if (timeUp()) { log('tempo esgotado na descoberta'); break; }
       try {
         const data = await getJson(`https://steamspy.com/api.php?request=tag&tag=${encodeURIComponent(genre.steamTag)}`);
@@ -263,16 +264,16 @@ export async function main(argv = process.argv.slice(2)) {
           r.approval = x.approval;
           if (x.med) r.med = x.med;
         }
-        ok++;
+        meta.genreAt[genre.id] = new Date().toISOString();
         log(`[${genre.id}] ${list.length} jogos`);
       } catch (e) {
-        log(`[${genre.id}] falhou (${e.message}); mantém o que já existia`);
+        log(`[${genre.id}] falhou (${e.message}); tenta de novo na próxima execução`);
       }
-      if (i < genres.length - 1) await sleep(S.tagDelayMs);
+      if (i < dueGenres.length - 1) await sleep(S.tagDelayMs);
     }
-    if (ok) meta.discoveredAt = new Date().toISOString();
+    meta.discoveredAt = new Date().toISOString();
   } else {
-    log(`descoberta pulada (última em ${meta.discoveredAt.slice(0, 10)})`);
+    log('descoberta pulada (todos os gêneros estão em dia)');
   }
 
   /* 2) detalhes da loja */

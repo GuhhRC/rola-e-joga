@@ -88,7 +88,7 @@ assert.equal(calls.store - before, 1, 'só o pendente 15 é consultado');
 process.env.MAX_DETAIL = '500';
 const fake = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, name: 'x' + i, genres: ['acao'] }));
 await writeFile(path.join(dir, 'curated.json'), JSON.stringify(fake.map((f) => ({ id: f.id, n: f.name, g: f.genres }))));
-await writeFile(path.join(dir, 'games.json'), JSON.stringify({ meta: { discoveredAt: new Date().toISOString() }, games: fake }));
+await writeFile(path.join(dir, 'games.json'), JSON.stringify({ meta: { genreAt: { acao: new Date().toISOString(), terror: new Date().toISOString() } }, games: fake }));
 await writeFile(path.join(dir, 'pending.json'), '[]');
 const prevExit = process.exit;
 process.exit = (c) => { throw new Error('exit ' + c); };
