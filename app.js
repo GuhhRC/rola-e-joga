@@ -646,7 +646,7 @@ function openQty() {
     showAll && h('button', { class: 'btn big', style: 'margin-top:8px', onclick: () => startSpin(n) }, `Todos (${n})`),
     n < 30 && h('p', { style: 'margin-top:10px' }, isLib()
       ? 'Poucos jogos nessa seleção. Troque o filtro ou o gênero para ter mais opções.'
-      : 'Poucos jogos nesse gênero por enquanto. A lista cresce a cada atualização semanal.'),
+      : 'Poucos jogos nesse gênero por enquanto. A lista cresce a cada atualização diária.'),
     h('button', { class: 'link cancel', onclick: closeModal }, 'cancelar'),
   );
   openModal(sheet);
@@ -687,33 +687,88 @@ function showSpin() {
 function statNodes(g) {
   const out = [];
   if (g.minutes != null) out.push(h('span', {}, h('b', {}, fmtHours(g.minutes))));
-  if (g.approval != null) out.push(h('span', {}, h('b', {}, g.approval + '%'), ' positivas' + (g.reviews ? ` (${nf.format(g.reviews)})` : '')));
+  if (g.approval != null) out.push(h('span', {}, h('b', {}, g.approval + '%'), ' avaliações positivas' + (g.reviews ? ` (${nf.format(g.reviews)})` : '')));
   const price = g.free ? 'Grátis' : g.price;
-  if (price && !isLib()) out.push(h('span', {}, price));
+  if (price && !isLib()) out.push(h('span', { class: 'price', 'data-price': '1' }, price));
   if (g.year) out.push(h('span', {}, String(g.year)));
   if (g.metacritic) out.push(h('span', {}, 'Metacritic ', h('b', {}, g.metacritic)));
-  if (!out.length) out.push(h('span', {}, 'Mais detalhes chegam na próxima atualização semanal'));
+  if (!out.length) out.push(h('span', { class: 'ph' }, 'Mais detalhes chegam na próxima atualização'));
   return out;
 }
 
+/* Afiliados: cada loja tem `search` (busca no site da loja, com {name}) e, opcionalmente, `link`
+   (deeplink de afiliado gerado no painel da Rakuten/Afilio, com {url} no lugar do destino).
+   Sem `link`, abre a busca simples (sem comissão). O formato antigo `url` continua valendo. */
 function offerLinks(g) {
+  const name = encodeURIComponent(g.name);
   return (CFG.affiliates || [])
-    .filter((a) => a && a.url)
-    .map((a) => ({ name: a.name, href: a.url.replaceAll('{name}', encodeURIComponent(g.name)).replaceAll('{id}', String(g.id)) }));
+    .map((a) => {
+      if (!a) return null;
+      const fill = (t) => String(t).replaceAll('{name}', name).replaceAll('{id}', String(g.id));
+      if (a.search) {
+        const dest = fill(a.search);
+        return { name: a.name, tracked: !!a.link, href: a.link ? String(a.link).replaceAll('{url}', encodeURIComponent(dest)).replaceAll('{name}', name) : dest };
+      }
+      if (a.url) return { name: a.name, tracked: true, href: fill(a.url) };
+      return null;
+    })
+    .filter(Boolean);
 }
 
 function openOffers(g) {
   const links = offerLinks(g);
   const sheet = h('div', { class: 'sheet', onclick: (e) => e.stopPropagation() },
-    h('h3', {}, 'Ver ofertas'),
+    h('h3', {}, 'Onde comprar'),
     h('p', {}, g.name),
     h('div', { class: 'offers' },
-      links.map((l) => h('a', { class: 'btn', href: l.href, target: '_blank', rel: 'sponsored noopener' }, l.name)),
+      links.map((l) => h('a', { class: 'btn', href: l.href, target: '_blank', rel: (l.tracked ? 'sponsored ' : '') + 'noopener' }, l.name)),
     ),
-    h('p', { class: 'fine' }, 'Links de afiliados: podemos receber uma comissão se você comprar, sem custo extra para você.'),
+    links.some((l) => l.tracked) && h('p', { class: 'fine' }, 'Alguns links são de afiliados: podemos receber uma comissão se você comprar, sem custo extra para você.'),
     h('button', { class: 'link cancel', onclick: closeModal }, 'fechar'),
   );
   openModal(sheet);
+}
+
+/* ---------- detalhes do jogo (carregados sob demanda, 1 arquivo por 100 ids) ---------- */
+const shardCache = new Map();
+function loadDetail(id) {
+  if (window.__DETAILS__) return Promise.resolve(window.__DETAILS__[id] || null);
+  const n = String(id % 100).padStart(2, '0');
+  if (!shardCache.has(n)) {
+    shardCache.set(n, fetch(`data/details/${n}.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+  }
+  return shardCache.get(n).then((sh) => sh[id] || null);
+}
+
+const PT_LABEL = { 1: 'Legendado em português', 2: 'Dublado/narrado em português' };
+const PLAT_LABEL = { win: 'Windows', mac: 'Mac', lin: 'Linux' };
+
+function detailNodes(d, g) {
+  const out = [];
+  const badges = [];
+  if (d.pt) badges.push(h('span', { class: 'badge pt' }, 'PT-BR · ' + (d.pt === 2 ? 'narrado' : 'legendado')));
+  if (d.mc) badges.push(h('span', { class: 'badge' }, 'Metacritic ' + d.mc));
+  if (d.ctrl) badges.push(h('span', { class: 'badge' }, d.ctrl === 'full' ? 'Controle: total' : 'Controle: parcial'));
+  (d.cats || []).slice(0, 4).forEach((c) => badges.push(h('span', { class: 'badge' }, c)));
+  if (badges.length) out.push(h('div', { class: 'badges' }, badges));
+
+  if (d.shots?.length) {
+    out.push(h('div', { class: 'shots' }, d.shots.map((u) => h('img', { src: u, alt: '', loading: 'lazy', decoding: 'async', onerror: (e) => e.target.remove() }))));
+  }
+
+  const rows = [];
+  if (d.dev?.length) rows.push(['Desenvolvedor', d.dev.join(', ')]);
+  if (d.pub?.length && d.pub.join() !== (d.dev || []).join()) rows.push(['Publicadora', d.pub.join(', ')]);
+  if (d.rel) rows.push(['Lançamento', d.rel]);
+  if (d.plat?.length) rows.push(['Plataformas', d.plat.map((p) => PLAT_LABEL[p] || p).join(', ')]);
+  if (g.med) rows.push(['Tempo típico', `${g.med >= 600 ? Math.round(g.med / 60) : (g.med / 60).toFixed(1).replace('.', ',')} h (mediana)`]);
+  if (d.recs) rows.push(['Recomendações', nf.format(d.recs)]);
+  if (d.age) rows.push(['Idade', d.age + '+']);
+  if (rows.length) out.push(h('dl', { class: 'facts' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])));
+
+  const tags = [...new Set([...(d.tags || []), ...(d.sg || [])])].slice(0, 8);
+  if (tags.length) out.push(h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))));
+  return out;
 }
 
 function gameResult(g, again) {
@@ -721,6 +776,25 @@ function gameResult(g, again) {
   const tags = (g.genres || []).map(labelOf).filter(Boolean).slice(0, 4);
   const lib = isLib();
   const offers = !lib && offerLinks(g).length > 0;
+  const extra = h('div', { class: 'extra hide-rec' });
+  loadDetail(g.id).then((d) => {
+    if (!d) return;
+    extra.parentNode?.querySelectorAll('.stats .ph').forEach((n) => n.remove());
+    if (d.desc && !g.desc) {
+      const body = extra.parentNode;
+      body?.insertBefore(h('p', { class: 'desc' }, d.desc), extra);
+    }
+    const pr = d.price && !d.free ? d.price : null;
+    if (pr && !lib) {
+      const root = extra.parentNode;
+      let el = root?.querySelector('[data-price]');
+      if (!el && root?.querySelector('.stats')) { el = h('span', { class: 'price', 'data-price': '1' }); root.querySelector('.stats').append(el); }
+      if (el) {
+        el.replaceChildren(...(pr.d ? [h('s', { class: 'old' }, pr.i || ''), ' ', h('b', {}, pr.f), ' ', h('span', { class: 'off' }, `-${pr.d}%`)] : [pr.f]));
+      }
+    }
+    extra.append(...detailNodes(d, g));
+  });
 
   const btnPlayed = h('button', { class: 'btn ghost' }, lib ? 'Tirar da roleta' : 'Já joguei · tirar');
   const btnChallenge = h('button', { class: 'btn ghost' }, 'Aceitar desafio');
@@ -758,6 +832,7 @@ function gameResult(g, again) {
         h('div', { class: 'stats' }, statNodes(g)),
         tags.length > 0 && h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))),
         g.desc && h('p', { class: 'desc' }, g.desc),
+        extra,
       ),
     ),
     h('div', { class: 'actions hide-rec' },
