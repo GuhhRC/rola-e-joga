@@ -748,14 +748,13 @@ function detailNodes(d, g) {
   const badges = [];
   if (d.pt) badges.push(h('span', { class: 'badge pt' }, 'PT-BR · ' + (d.pt === 2 ? 'narrado' : 'legendado')));
   if (d.mc) badges.push(h('span', { class: 'badge' }, 'Metacritic ' + d.mc));
-  if (d.ctrl) badges.push(h('span', { class: 'badge' }, d.ctrl === 'full' ? 'Controle: total' : 'Controle: parcial'));
-  (d.cats || []).slice(0, 4).forEach((c) => badges.push(h('span', { class: 'badge' }, c)));
   if (badges.length) out.push(h('div', { class: 'badges' }, badges));
 
   if (d.shots?.length) {
     out.push(h('div', { class: 'shots' }, d.shots.map((u) => h('img', { src: u, alt: '', loading: 'lazy', decoding: 'async', onerror: (e) => e.target.remove() }))));
   }
 
+  // o resto fica recolhido, para o card não ficar enorme
   const rows = [];
   if (d.dev?.length) rows.push(['Desenvolvedor', d.dev.join(', ')]);
   if (d.pub?.length && d.pub.join() !== (d.dev || []).join()) rows.push(['Publicadora', d.pub.join(', ')]);
@@ -764,10 +763,15 @@ function detailNodes(d, g) {
   if (g.med) rows.push(['Tempo típico', `${g.med >= 600 ? Math.round(g.med / 60) : (g.med / 60).toFixed(1).replace('.', ',')} h (mediana)`]);
   if (d.recs) rows.push(['Recomendações', nf.format(d.recs)]);
   if (d.age) rows.push(['Idade', d.age + '+']);
-  if (rows.length) out.push(h('dl', { class: 'facts' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])));
+  if (d.ctrl) rows.push(['Controle', d.ctrl === 'full' ? 'Suporte total' : 'Suporte parcial']);
 
+  const modes = (d.cats || []).filter((c) => !/coop|cooperativ/i.test(c) || /on-?line/i.test(c) || (d.cats || []).length < 3);
   const tags = [...new Set([...(d.tags || []), ...(d.sg || [])])].slice(0, 8);
-  if (tags.length) out.push(h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))));
+  const more = [];
+  if (rows.length) more.push(h('dl', { class: 'facts' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])));
+  if (modes.length) more.push(h('div', { class: 'badges' }, modes.slice(0, 4).map((c) => h('span', { class: 'badge' }, c))));
+  if (tags.length) more.push(h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))));
+  if (more.length) out.push(h('details', { class: 'more' }, h('summary', {}, 'Mais detalhes'), ...more));
   return out;
 }
 
