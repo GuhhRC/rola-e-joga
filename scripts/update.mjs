@@ -50,7 +50,7 @@ function settings() {
     catalogAdult: e.CATALOG_ADULT !== '0', // catálogo +18 separado; nunca entra na roleta
     adultMinReviews: num(e.ADULT_MIN_REVIEWS, 200),
     adultPerTag: num(e.ADULT_PER_TAG, 800),
-    maxAdult: num(e.MAX_ADULT, 300),
+    maxAdult: num(e.MAX_ADULT, 500),
     smallGenreBelow: num(e.SMALL_GENRE_BELOW, 200), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
   };
 }
@@ -176,7 +176,7 @@ function slimOf(rec) {
   return o;
 }
 
-async function writeAll(S, records, details, blocked, meta, pending = new Map(), adult = new Map()) {
+async function writeAll(S, records, details, blocked, meta, pending = new Map(), adult = new Map(), rejected = {}) {
   await mkdir(path.join(S.data, 'details'), { recursive: true });
   const slim = [...records.values()].map(slimOf).sort((a, b) => a.name.localeCompare(b.name, 'en'));
   const genreCounts = {};
@@ -195,7 +195,7 @@ async function writeAll(S, records, details, blocked, meta, pending = new Map(),
   await writeFile(path.join(S.data, 'blocked.json'), JSON.stringify(blocked, null, 0) + '\n');
   // catálogo +18: separado da roleta, só ids e números
   const adl = [...adult.values()].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
-  await writeFile(path.join(S.data, 'adult.json'), `{"meta":${JSON.stringify({ updatedAt: new Date().toISOString(), count: adl.length, confirmed: adl.filter((g) => g.v).length })},"games":[\n${adl.map((g) => JSON.stringify(g)).join(',\n')}\n]}\n`);
+  await writeFile(path.join(S.data, 'adult.json'), `{"meta":${JSON.stringify({ updatedAt: new Date().toISOString(), count: adl.length, confirmed: adl.filter((g) => g.v).length })},"rejected":${JSON.stringify(rejected)},"games":[\n${adl.map((g) => JSON.stringify(g)).join(',\n')}\n]}\n`);
   // candidatos ainda sem detalhes: ficam guardados para as próximas execuções (não aparecem na roleta)
   const pend = [...pending.values()].map(slimOf).sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
   await writeFile(path.join(S.data, 'pending.json'), `[\n${pend.map((g) => JSON.stringify(g)).join(',\n')}\n]\n`);
@@ -226,6 +226,10 @@ export async function main(argv = process.argv.slice(2)) {
   const prevPending = await readJson(path.join(S.data, 'pending.json'), []);
   const adultFile = await readJson(path.join(S.data, 'adult.json'), { games: [] });
   const adult = new Map((adultFile.games || []).filter((g) => g?.id && g.name).map((g) => [g.id, g]));
+  // entradas antigas, confirmadas só pela tag (sem o selo da própria Steam), voltam para a fila de conferência
+  for (const e of adult.values()) if (!e.f) delete e.v;
+  const rejected = { ...(adultFile.rejected || {}) };
+  const isRejected = (id) => rejected[id] && (Date.now() - new Date(rejected[id])) / 864e5 < 90;
 
   // registros em memória, a partir do índice anterior (descarta campos do formato antigo)
   const records = new Map();
@@ -251,7 +255,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (argv.includes('--seed-only')) {
     const pend = new Map();
     for (const r of [...records.values()]) if (!curatedIds.has(r.id) && !details.has(r.id)) { pend.set(r.id, r); records.delete(r.id); }
-    await writeAll(S, records, details, blocked, { source: 'seed' }, pend, adult);
+    await writeAll(S, records, details, blocked, { source: 'seed' }, pend, adult, rejected);
     return;
   }
 
@@ -308,6 +312,7 @@ export async function main(argv = process.argv.slice(2)) {
         const list = parseSpyList(data, S.adultMinReviews, S.minApproval).slice(0, S.adultPerTag);
         if (!list.length) throw new Error('lista vazia');
         for (const x of list) {
+          if (isRejected(x.id)) continue;
           const e = adult.get(x.id) || { id: x.id, name: x.name };
           e.tags = [...new Set([...(e.tags || []), tag])];
           e.reviews = x.total;
@@ -361,7 +366,8 @@ export async function main(argv = process.argv.slice(2)) {
           blocked[rec.id] = { r: p.block, ...(p.until ? { until: p.until } : {}) };
           if (p.block === 'adult' && S.catalogAdult && p.windows) {
             const old = adult.get(rec.id) || {};
-            adult.set(rec.id, { ...old, id: rec.id, name: p.adult.name || rec.name, reviews: rec.reviews ?? old.reviews, approval: rec.approval ?? old.approval, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today });
+            adult.set(rec.id, { ...old, id: rec.id, name: p.adult.name || rec.name, reviews: rec.reviews ?? old.reviews, approval: rec.approval ?? old.approval, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today, f: 1 });
+            delete rejected[rec.id];
           }
           if (!curatedIds.has(rec.id) || p.block === 'adult') { records.delete(rec.id); details.delete(rec.id); }
           break;
@@ -391,7 +397,7 @@ export async function main(argv = process.argv.slice(2)) {
   /* 2b) confirma os candidatos do catálogo +18 na loja (só nome, ano e preço; sem descrição nem imagens) */
   if (S.catalogAdult) {
     const aq = [...adult.values()]
-      .filter((e) => !e.v && !(blocked[e.id] && blocked[e.id].r !== 'adult' && isBlocked(e.id)))
+      .filter((e) => !e.v && !isRejected(e.id) && !(blocked[e.id] && blocked[e.id].r !== 'adult' && isBlocked(e.id)))
       .sort((a, b) => (b.reviews || 0) - (a.reviews || 0))
       .slice(0, S.maxAdult);
     log(`== catálogo +18: ${aq.length} para confirmar ==`);
@@ -427,8 +433,10 @@ export async function main(argv = process.argv.slice(2)) {
         continue;
       }
       if (p.block === 'adult' && !p.windows) { adult.delete(e.id); continue; }
-      const s2 = p.block ? p.adult : p.adultSlim;
-      Object.assign(e, { name: s2.name || e.name, year: s2.year, free: s2.free, price: s2.price, v: today });
+      // só entra quem a própria Steam marca como conteúdo sexual/nudez frequente.
+      // Estar nas listas de tags do SteamSpy não basta (jogos comuns recebem votos de brincadeira).
+      if (!p.block) { adult.delete(e.id); rejected[e.id] = today; continue; }
+      Object.assign(e, { name: p.adult.name || e.name, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today, f: 1 });
       for (const key of Object.keys(e)) if (e[key] === undefined) delete e[key];
       okAdult++;
     }
@@ -481,7 +489,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.error(`Abortado: ${records.size} jogos contra ${prevCount} antes. Mantendo os arquivos anteriores.`);
     process.exit(1);
   }
-  await writeAll(S, records, details, blocked, meta, pending, adult);
+  await writeAll(S, records, details, blocked, meta, pending, adult, rejected);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

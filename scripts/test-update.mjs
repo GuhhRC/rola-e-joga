@@ -45,6 +45,7 @@ const store = {
   22: { success: true, data: { ...base, name: 'Jogo comum com tag' } },
   30: { success: true, data: { ...base, name: 'Rogue A' } },
   31: { success: true, data: { ...base, name: 'Rogue B' } },
+  99: { success: true, data: { ...base, name: 'Velho' } },
   1: { success: true, data: { ...base, name: 'Curado', genres: [{ id: '25', description: 'Aventura' }] } },
 };
 globalThis.fetch = async (url) => {
@@ -94,15 +95,23 @@ assert.deepEqual(pend.map((x) => x.id), [31], 'candidato não buscado fica pende
 assert.ok(!ids.includes(32), 'jogo mal avaliado do alias fica de fora');
 const ad = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 const adIds = ad.games.map((g) => g.id).sort((a, b) => a - b);
-assert.deepEqual(adIds, [12, 20, 22], 'catálogo +18: adulto da loja (12, 20) e jogo comum com a tag (22); em breve (21) fica de fora');
+assert.deepEqual(adIds, [12, 20], 'catálogo +18: só quem a Steam marca como adulto (12, 20); jogo comum com a tag (22) e em breve (21) ficam de fora');
+assert.ok(ad.rejected['22'], 'jogo comum com a tag fica registrado como rejeitado');
+assert.ok(ad.games.every((g) => g.f === 1));
 assert.ok(ad.games.every((g) => g.v && !('desc' in g) && !('shots' in g)), 'só dados mínimos, sem descrição nem imagens');
 assert.ok(!games.games.some((g) => [12, 20, 21].includes(g.id)), 'catálogo +18 nunca entra na roleta');
 assert.equal((ad.games.find((g) => g.id === 20)).year, 2022);
 
 /* ---- segunda execução: incremental, não repete ---- */
+// entrada antiga (confirmada só pela tag, sem selo) precisa ser reavaliada e sair
+const adOld = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+adOld.games.push({ id: 99, name: 'Velho', v: '2026-01-01' });
+await writeFile(path.join(dir, 'adult.json'), JSON.stringify(adOld));
 const before = calls.store;
 await main([]);
-assert.equal(calls.store - before, 1, 'só o pendente 31 é consultado');
+assert.equal(calls.store - before, 2, 'consulta o pendente 31 e reavalia a entrada antiga 99');
+const ad2 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+assert.ok(!ad2.games.some((g) => g.id === 99) && ad2.rejected['99'], 'entrada antiga sem selo da Steam é removida');
 /* ---- trava de segurança: índice encolhendo ---- */
 process.env.MAX_DETAIL = '500';
 const fake = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, name: 'x' + i, genres: ['acao'] }));

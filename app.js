@@ -1416,7 +1416,7 @@ async function enterAdult() {
   let list = [];
   try {
     const r = window.__ADULT__ ? window.__ADULT__ : await fetch('data/adult.json', { cache: 'no-cache' }).then((x) => (x.ok ? x.json() : { games: [] }));
-    list = (r.games || []).filter((g) => g && g.id && g.name && g.v);
+    list = (r.games || []).filter((g) => g && g.id && g.name && g.v && g.f); // só os confirmados pelo selo da Steam
   } catch { list = []; }
   const tagId = new Map(ADULT_GENRES.map((g) => [g.tag, g.id]));
   const games = list.map((g) => ({
