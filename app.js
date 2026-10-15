@@ -78,6 +78,8 @@ const state = {
   meta: {},
   byId: new Map(),
 
+  adult: false, // modo +18 (escondido)
+  normal: null, // cópia do catálogo normal enquanto o +18 está ativo
   source: 'catalog', // 'catalog' | 'library'
   lib: null, // { profile, games, filter }
   libBusy: false,
@@ -231,8 +233,10 @@ function flick(el) {
 /* ==========================================================================
    A RODA (canvas) — até 20 itens
    ========================================================================== */
+const ACC = () => (document.body.classList.contains('adult') ? '#ff3b4e' : '#2eea7a');
+const ACC_GLOW = () => (document.body.classList.contains('adult') ? 'rgba(255,59,78,.55)' : 'rgba(46,234,122,.55)');
 const POINTER_SVG =
-  '<svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M2 3h18L11 24z" fill="#2eea7a" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round"/></svg>';
+  '<svg viewBox="0 0 22 26" xmlns="http://www.w3.org/2000/svg"><path d="M2 3h18L11 24z" style="fill:var(--green)" stroke="#0a0a0a" stroke-width="2" stroke-linejoin="round"/></svg>';
 
 function drawWheel(cv, labels, rot, hi) {
   const size = cv.clientWidth;
@@ -258,7 +262,7 @@ function drawWheel(cv, labels, rot, hi) {
     x.moveTo(c, c);
     x.arc(c, c, R, a0, a0 + step);
     x.closePath();
-    x.fillStyle = i === hi ? '#2eea7a' : i % 2 ? '#111713' : '#0b0f0d';
+    x.fillStyle = i === hi ? ACC() : i % 2 ? '#111713' : '#0b0f0d';
     x.fill();
     x.lineWidth = 1;
     x.strokeStyle = '#1d2a23';
@@ -269,7 +273,7 @@ function drawWheel(cv, labels, rot, hi) {
     x.rotate(rot + i * step - Math.PI / 2);
     x.textAlign = 'right';
     x.textBaseline = 'middle';
-    x.fillStyle = i === hi ? '#04130a' : '#cfe9d9';
+    x.fillStyle = i === hi ? '#0a0a0a' : '#cfe9d9';
     x.font = `700 ${fs}px "JetBrains Mono", ui-monospace, monospace`;
     x.fillText(cut(labels[i]), R - 14, 0);
     x.restore();
@@ -279,8 +283,8 @@ function drawWheel(cv, labels, rot, hi) {
   x.beginPath();
   x.arc(c, c, R, 0, TAU);
   x.lineWidth = 2;
-  x.strokeStyle = '#2eea7a';
-  x.shadowColor = 'rgba(46,234,122,.55)';
+  x.strokeStyle = ACC();
+  x.shadowColor = ACC_GLOW();
   x.shadowBlur = 14;
   x.stroke();
   x.shadowBlur = 0;
@@ -291,11 +295,11 @@ function drawWheel(cv, labels, rot, hi) {
   x.fillStyle = '#0a0a0a';
   x.fill();
   x.lineWidth = 2;
-  x.strokeStyle = '#2eea7a';
+  x.strokeStyle = ACC();
   x.stroke();
   x.beginPath();
   x.arc(c, c, size * 0.024, 0, TAU);
-  x.fillStyle = '#2eea7a';
+  x.fillStyle = ACC();
   x.fill();
 }
 
@@ -473,19 +477,26 @@ function showHome() {
       h('a', { href: 'privacidade.html' }, 'Privacidade'),
     ),
     h('div', { class: 'foot-note' }, 'Steam é marca da Valve Corporation. Este site não é afiliado à Valve.'),
-    h('div', { class: 'foot-note' }, `${CREATOR.role}: ${CREATOR.name}`),
+    state.adult
+      ? h('div', { class: 'foot-note' }, 'Conteúdo para maiores de 18 anos.')
+      : h('div', { class: 'foot-note credit' }, `${CREATOR.role}: `,
+        h('span', { class: 'at-wrap' }, CREATOR.name,
+          h('button', { class: 'secret', 'aria-hidden': 'true', tabindex: '-1', onclick: onSecretTap }))),
   );
 
   mount(
     h('section', {},
       h('div', { class: 'hero hide-rec' },
-        h('h1', {}, 'O que vamos jogar ', h('em', {}, 'hoje?')),
-        h('p', {}, isLib()
+        h('h1', {}, state.adult ? 'Modo ' : 'O que vamos jogar ', h('em', {}, state.adult ? '+18' : 'hoje?')),
+        h('p', {}, state.adult
+          ? 'Só para maiores de 18 anos. As capas ficam borradas: toque na capa para ver.'
+          : isLib()
           ? 'Cole o perfil da Steam e sorteie entre os jogos da biblioteca, inclusive só os que você nunca jogou.'
           : 'Escolha um gênero, defina quantos jogos entram na roleta e jogue o que ela mandar.'),
       ),
-      seg,
+      !state.adult && seg,
       isLib() ? libraryPanel() : catalogPanel(),
+      state.adult && h('button', { class: 'undecided hide-rec', onclick: exitAdult }, 'Sair do modo +18'),
       foot,
     ),
   );
@@ -499,6 +510,9 @@ function genreGrid(genres, extra) {
 }
 
 function catalogPanel() {
+  if (state.adult && !state.genres.length) {
+    return h('div', { class: 'state-msg' }, 'Ainda não há jogos +18 catalogados.', h('br'), h('small', {}, 'A lista é montada pelo robô diário. Volte depois da próxima atualização.'));
+  }
   return h('div', {},
     genreGrid(state.genres),
     h('button', { class: 'undecided', onclick: showGenreWheel }, 'Estou indeciso · girar gêneros'),
@@ -734,6 +748,7 @@ function openOffers(g) {
 /* ---------- detalhes do jogo (carregados sob demanda, 1 arquivo por 100 ids) ---------- */
 const shardCache = new Map();
 function loadDetail(id) {
+  if (state.adult) return Promise.resolve(null); // +18: sem descrição nem prints
   if (window.__DETAILS__) return Promise.resolve(window.__DETAILS__[id] || null);
   const n = String(id % 100).padStart(2, '0');
   if (!shardCache.has(n)) {
@@ -778,10 +793,10 @@ function detailNodes(d, g) {
 }
 
 function gameResult(g, again, opts = {}) {
-  if (!opts.shared) pushHistory(g);
+  if (!opts.shared && !state.adult) pushHistory(g);
   const tags = (g.genres || []).map(labelOf).filter(Boolean).slice(0, 4);
   const lib = isLib();
-  const offers = !lib && offerLinks(g).length > 0;
+  const offers = !lib && !state.adult && offerLinks(g).length > 0;
   const extra = h('div', { class: 'extra hide-rec' });
   loadDetail(g.id).then((d) => {
     if (!d) return;
@@ -835,7 +850,7 @@ function gameResult(g, again, opts = {}) {
 
   return [
     h('article', { class: 'card' },
-      h('div', { class: 'cover' }, coverImg(g)),
+      h('div', { class: 'cover', onclick: (e) => e.currentTarget.classList.toggle('show') }, coverImg(g)),
       h('div', { class: 'card-body' },
         h('h2', {}, g.name),
         h('div', { class: 'stats' }, statNodes(g)),
@@ -848,10 +863,10 @@ function gameResult(g, again, opts = {}) {
       h('a', { class: 'btn primary', href: storeUrl(g.id), target: '_blank', rel: 'noopener' }, 'Abrir na Steam'),
       btnAgain,
       offers && h('button', { class: 'btn', onclick: () => openOffers(g) }, 'Ver ofertas'),
-      !opts.shared && btnPlayed,
-      !opts.shared && btnChallenge,
-      btnShare,
-      btnCopy,
+      !opts.shared && !state.adult && btnPlayed,
+      !opts.shared && !state.adult && btnChallenge,
+      !state.adult && btnShare,
+      !state.adult && btnCopy,
     ),
   ];
 }
@@ -1351,6 +1366,79 @@ async function loadJson(inline, url) {
   const r = await fetch(url, { cache: 'no-cache' });
   if (!r.ok) throw new Error(url + ' → HTTP ' + r.status);
   return r.json();
+}
+
+/* ==========================================================================
+   Modo +18 (escondido): toque duplo no ícone da roleta + toque no @ do rodapé
+   Fica separado do catálogo normal e nunca grava histórico, listas nem compartilha.
+   ========================================================================== */
+const ADULT_GENRES = [
+  { id: 'sexual', label: 'Conteúdo sexual', tag: 'Sexual Content' },
+  { id: 'hentai', label: 'Hentai', tag: 'Hentai' },
+  { id: 'nudez', label: 'Nudez', tag: 'Nudity' },
+];
+let armTimer = 0;
+let lastLogoTap = 0;
+
+function arm() {
+  document.body.classList.add('armed');
+  try { navigator.vibrate?.(25); } catch { /* sem vibração */ }
+  clearTimeout(armTimer);
+  armTimer = setTimeout(disarm, 20000);
+}
+function disarm() {
+  clearTimeout(armTimer);
+  document.body.classList.remove('armed');
+}
+function onSecretTap(e) {
+  e.stopPropagation();
+  if (!document.body.classList.contains('armed') || state.adult) return;
+  disarm();
+  openAdultGate();
+}
+$('.brand .logo')?.addEventListener('click', () => {
+  const now = Date.now();
+  if (now - lastLogoTap < 450) { lastLogoTap = 0; if (!state.adult) arm(); } else lastLogoTap = now;
+});
+
+function openAdultGate() {
+  const sheet = h('div', { class: 'sheet gate', onclick: (e) => e.stopPropagation() },
+    h('h3', {}, 'Conteúdo +18'),
+    h('p', {}, 'Esta área lista jogos com conteúdo sexual e nudez. Só entre se você tem 18 anos ou mais.'),
+    h('button', { class: 'btn primary big', style: 'margin-top:16px', onclick: enterAdult }, 'Tenho 18 anos ou mais'),
+    h('button', { class: 'link cancel', onclick: closeModal }, 'sair'),
+  );
+  openModal(sheet);
+}
+
+async function enterAdult() {
+  closeModal();
+  let list = [];
+  try {
+    const r = window.__ADULT__ ? window.__ADULT__ : await fetch('data/adult.json', { cache: 'no-cache' }).then((x) => (x.ok ? x.json() : { games: [] }));
+    list = (r.games || []).filter((g) => g && g.id && g.name && g.v);
+  } catch { list = []; }
+  const tagId = new Map(ADULT_GENRES.map((g) => [g.tag, g.id]));
+  const games = list.map((g) => ({
+    id: g.id, name: g.name, approval: g.approval, reviews: g.reviews, year: g.year, free: g.free, price: g.price,
+    genres: (g.tags || []).map((t) => tagId.get(t)).filter(Boolean).length ? (g.tags || []).map((t) => tagId.get(t)).filter(Boolean) : ['sexual'],
+  }));
+  state.normal = { games: state.games, byId: state.byId, genres: state.genres, baseGenres: state.baseGenres, source: state.source };
+  state.games = games;
+  state.byId = new Map(games.map((g) => [g.id, g]));
+  state.baseGenres = ADULT_GENRES;
+  state.genres = ADULT_GENRES.map((g) => ({ ...g, count: games.filter((x) => x.genres.includes(g.id)).length })).filter((g) => g.count > 0);
+  state.source = 'catalog';
+  state.adult = true;
+  document.body.classList.add('adult');
+  showHome();
+}
+
+function exitAdult() {
+  if (!state.normal) return;
+  Object.assign(state, state.normal, { adult: false, normal: null });
+  document.body.classList.remove('adult', 'armed');
+  showHome();
 }
 
 /* ---------- jogo compartilhado (#j=<id>) ---------- */
