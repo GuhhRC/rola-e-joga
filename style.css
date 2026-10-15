@@ -541,3 +541,6 @@ body.rec .ad-side, .stage.rec .ad-slot, .stage.rec .consent { display: none !imp
 .welcome-steps b{color:var(--green);font-family:var(--mono,monospace);margin-right:4px}
 .welcome-by{margin-top:14px;font-size:12px;color:var(--muted)}
 .welcome-by a,.welcome-by b{color:var(--green);font-weight:600;text-decoration:none}
+
+.shared-note{margin:2px 2px 10px;font:600 12px var(--mono,monospace);letter-spacing:.06em;color:var(--green);text-transform:uppercase}
+.actions .copy-link{grid-column:1/-1;justify-self:center;margin-top:2px;font-size:12px}

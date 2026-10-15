@@ -777,8 +777,8 @@ function detailNodes(d, g) {
   return out;
 }
 
-function gameResult(g, again) {
-  pushHistory(g);
+function gameResult(g, again, opts = {}) {
+  if (!opts.shared) pushHistory(g);
   const tags = (g.genres || []).map(labelOf).filter(Boolean).slice(0, 4);
   const lib = isLib();
   const offers = !lib && offerLinks(g).length > 0;
@@ -805,7 +805,9 @@ function gameResult(g, again) {
   const btnPlayed = h('button', { class: 'btn ghost' }, lib ? 'Tirar da roleta' : 'Já joguei · tirar');
   const btnChallenge = h('button', { class: 'btn ghost' }, 'Aceitar desafio');
   const btnShare = h('button', { class: 'btn ghost' }, 'Compartilhar card');
-  const btnAgain = h('button', { class: 'btn' }, 'Girar de novo');
+  const btnAgain = h('button', { class: 'btn' }, opts.shared ? 'Girar a minha roleta' : 'Girar de novo');
+  const btnCopy = h('button', { class: 'link copy-link' }, 'Copiar texto com link');
+  btnCopy.addEventListener('click', async () => { toast((await copyText(shareText(g))) ? 'Texto com link copiado.' : 'Não consegui copiar.'); });
 
   if (state.challenges.some((c) => c.id === g.id)) { btnChallenge.disabled = true; btnChallenge.textContent = 'Desafio aceito'; }
 
@@ -825,6 +827,7 @@ function gameResult(g, again) {
   btnShare.addEventListener('click', () => shareCard(g, btnShare));
   const lastPoolSize = state.pool.length; // se mudar (tirou um jogo), reconstrói a roleta
   btnAgain.addEventListener('click', () => {
+    if (opts.shared) { showHome(); return; }
     if (!state.pool.length) { toast('A roleta ficou vazia. Escolha outro gênero.'); showHome(); return; }
     if (state.pool.length !== lastPoolSize) showSpin();
     else again();
@@ -845,9 +848,10 @@ function gameResult(g, again) {
       h('a', { class: 'btn primary', href: storeUrl(g.id), target: '_blank', rel: 'noopener' }, 'Abrir na Steam'),
       btnAgain,
       offers && h('button', { class: 'btn', onclick: () => openOffers(g) }, 'Ver ofertas'),
-      btnPlayed,
-      btnChallenge,
+      !opts.shared && btnPlayed,
+      !opts.shared && btnChallenge,
       btnShare,
+      btnCopy,
     ),
   ];
 }
@@ -1149,23 +1153,62 @@ async function makeCard(g) {
   return cv;
 }
 
+/* Link do resultado: abre o site direto no jogo sorteado (#j=<id>) */
+function siteBase() {
+  const fixed = String(CFG.siteUrl || '').replace(/\/$/, '');
+  if (fixed) return fixed + '/';
+  return location.origin + location.pathname.replace(/index\.html$/, '');
+}
+function shareUrl(g) {
+  return siteBase() + (state.byId.has(g.id) ? `#j=${g.id}` : '');
+}
+const SHARE_TEXTS = [
+  'A roleta decidiu: eu vou jogar {name}. Sem volta! Gira a sua: {url}',
+  'Tirei {name} na roleta do Rola e Joga! Agora eu tenho que jogar. Gira a sua: {url}',
+  'Pedi um jogo de {genre} e a roleta mandou {name}. Gira a sua: {url}',
+  'Indeciso demais para escolher, então a roleta escolheu: {name}. Tenta a sua: {url}',
+];
+function shareText(g) {
+  const list = Array.isArray(CFG.shareTexts) && CFG.shareTexts.length ? CFG.shareTexts : SHARE_TEXTS;
+  const genre = (g.genres || []).map(labelOf).find(Boolean);
+  // textos com {genre} só quando o jogo tem gênero
+  const ok = list.filter((t) => genre || !t.includes('{genre}'));
+  const t = (ok.length ? ok : SHARE_TEXTS.filter((x) => !x.includes('{genre}')))[Math.floor(Math.random() * (ok.length || 1))];
+  return String(t).replaceAll('{name}', g.name).replaceAll('{genre}', genre || 'jogo').replaceAll('{url}', shareUrl(g));
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* sem permissão de área de transferência */ }
+  try {
+    const ta = h('textarea', { style: 'position:fixed;opacity:0' }, text);
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
 async function shareCard(g, btn) {
   const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Gerando…';
+  const text = shareText(g);
   try {
     const cv = await makeCard(g);
     const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
     if (!blob) throw new Error('sem imagem');
     const file = new File([blob], `rola-e-joga-${g.id}.png`, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text: `A roleta mandou: ${g.name}` });
+      // alguns apps ignoram o texto quando há imagem: por isso o texto também vai para a área de transferência
+      await copyText(text);
+      await navigator.share({ files: [file], text });
+      toast('Texto com link copiado também.');
     } else {
       const a = h('a', { href: URL.createObjectURL(blob), download: file.name });
       document.body.append(a);
       a.click();
       a.remove();
-      toast('Card salvo (1080x1920).');
+      toast((await copyText(text)) ? 'Card salvo e texto com link copiado.' : 'Card salvo (1080x1920).');
     }
   } catch (e) {
     if (e && e.name !== 'AbortError') toast('Não consegui gerar o card.');
@@ -1310,6 +1353,19 @@ async function loadJson(inline, url) {
   return r.json();
 }
 
+/* ---------- jogo compartilhado (#j=<id>) ---------- */
+function showShared(g) {
+  state.view = 'shared';
+  state.busy = false;
+  $back.hidden = false;
+  mount(
+    h('section', {},
+      h('p', { class: 'shared-note hide-rec' }, 'Alguém sorteou este jogo na roleta:'),
+      ...gameResult(g, null, { shared: true }),
+    ),
+  );
+}
+
 /* ---------- boas-vindas (só na primeira visita) ---------- */
 function showWelcome() {
   if (store.get('welcomed', false)) return;
@@ -1356,6 +1412,10 @@ async function boot() {
     const m = location.hash.match(/^#g=([a-z-]+)$/);
     const target = m && state.genres.find((g) => g.id === m[1]);
     if (target) { state.source = 'catalog'; showHome(); pickGenre(target); }
+    // link do resultado: /#j=<id> abre o card do jogo sorteado
+    const mj = location.hash.match(/^#j=(\d+)$/);
+    const shared = mj && state.byId.get(+mj[1]);
+    if (shared) { state.source = 'catalog'; showShared(shared); }
     showWelcome();
   } catch (e) {
     console.error(e);
