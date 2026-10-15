@@ -12,6 +12,7 @@ const CFG = Object.assign(
   { siteName: 'Rola e Joga!', siteLabel: 'Rola e Joga!', siteUrl: '', apiUrl: '', ads: {}, affiliates: [] },
   window.ROLA_CONFIG || {},
 );
+const CREATOR = Object.assign({ name: '@opropriogustavo', role: 'Idealizador', url: '' }, CFG.creator || {});
 const API_URL = String(window.__API_URL__ || CFG.apiUrl || '').replace(/\/$/, '');
 const ADS = CFG.ads || {};
 const ADS_ON = !!(ADS.enabled && ADS.client);
@@ -472,6 +473,7 @@ function showHome() {
       h('a', { href: 'privacidade.html' }, 'Privacidade'),
     ),
     h('div', { class: 'foot-note' }, 'Steam é marca da Valve Corporation. Este site não é afiliado à Valve.'),
+    h('div', { class: 'foot-note' }, `${CREATOR.role}: ${CREATOR.name}`),
   );
 
   mount(
@@ -1308,6 +1310,29 @@ async function loadJson(inline, url) {
   return r.json();
 }
 
+/* ---------- boas-vindas (só na primeira visita) ---------- */
+function showWelcome() {
+  if (store.get('welcomed', false)) return;
+  const close = () => { store.set('welcomed', true); box.remove(); };
+  const who = CREATOR.url
+    ? h('a', { href: CREATOR.url, target: '_blank', rel: 'noopener' }, CREATOR.name)
+    : h('b', {}, CREATOR.name);
+  const box = h('div', { class: 'welcome', role: 'dialog', 'aria-label': 'Boas-vindas' },
+    h('div', { class: 'welcome-card' },
+      h('div', { class: 'welcome-title' }, 'Rola ', h('em', {}, 'e'), ' ', h('span', {}, 'Joga!')),
+      h('p', { class: 'welcome-lead' }, 'Tem jogo demais e vontade de menos? A roleta decide por você.'),
+      h('ol', { class: 'welcome-steps' },
+        h('li', {}, h('b', {}, '1'), ' Escolha um gênero'),
+        h('li', {}, h('b', {}, '2'), ' Gire a roleta'),
+        h('li', {}, h('b', {}, '3'), ' Jogue o que sair'),
+      ),
+      h('button', { class: 'btn primary big', onclick: close }, 'Bora jogar'),
+      h('p', { class: 'welcome-by' }, `${CREATOR.role}: `, who),
+    ),
+  );
+  (modal.parentNode || document.body).append(box);
+}
+
 async function boot() {
   renderSound();
   mount(h('div', { class: 'state-msg' }, h('div', { class: 'loader' }), 'Carregando jogos…'));
@@ -1331,6 +1356,7 @@ async function boot() {
     const m = location.hash.match(/^#g=([a-z-]+)$/);
     const target = m && state.genres.find((g) => g.id === m[1]);
     if (target) { state.source = 'catalog'; showHome(); pickGenre(target); }
+    showWelcome();
   } catch (e) {
     console.error(e);
     mount(

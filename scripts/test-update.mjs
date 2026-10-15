@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'rej-'));
-Object.assign(process.env, { DATA_DIR: dir, TAG_DELAY_MS: '0', DETAIL_DELAY_MS: '0', SPY_DELAY_MS: '0', RATE_PAUSE_MS: '0', MAX_DETAIL: '6', MIN_REVIEWS: '500' });
+Object.assign(process.env, { DATA_DIR: dir, TAG_DELAY_MS: '0', DETAIL_DELAY_MS: '0', SPY_DELAY_MS: '0', RATE_PAUSE_MS: '0', MAX_DETAIL: '8', MIN_REVIEWS: '500' });
 const { main, parseDetail } = await import('./update.mjs');
 
 /* ---- parseDetail ---- */
@@ -28,7 +28,7 @@ assert.deepEqual(p.detail.plat, ['win', 'lin']);
 
 /* ---- fluxo completo com fetch falso ---- */
 await mkdir(dir, { recursive: true });
-await writeFile(path.join(dir, 'genres.json'), JSON.stringify([{ id: 'acao', label: 'Ação', steamTag: 'Action' }, { id: 'terror', label: 'Terror', steamTag: 'Horror' }]));
+await writeFile(path.join(dir, 'genres.json'), JSON.stringify([{ id: 'acao', label: 'Ação', steamTag: 'Action' }, { id: 'terror', label: 'Terror', steamTag: 'Horror' }, { id: 'rogue', label: 'Rogue', steamTag: 'Roguelike', steamTags: ['Roguelike', 'Roguelite'] }]));
 await writeFile(path.join(dir, 'curated.json'), JSON.stringify([{ id: 1, n: 'Curado', g: ['acao'] }]));
 
 const calls = { store: 0 };
@@ -39,6 +39,12 @@ const store = {
   12: { success: true, data: { ...base, name: 'Adulto', content_descriptors: { ids: [4] } } },
   13: { success: false },
   14: { success: true, data: { ...base, name: 'Em breve', release_date: { coming_soon: true } } },
+  12: { success: true, data: { ...base, name: 'Adulto', content_descriptors: { ids: [4] } } },
+  20: { success: true, data: { ...base, name: 'Adulto B', content_descriptors: { ids: [3] }, release_date: { coming_soon: false, date: '1 de jan. de 2022' } } },
+  21: { success: true, data: { ...base, name: 'Em breve B', release_date: { coming_soon: true } } },
+  22: { success: true, data: { ...base, name: 'Jogo comum com tag' } },
+  30: { success: true, data: { ...base, name: 'Rogue A' } },
+  31: { success: true, data: { ...base, name: 'Rogue B' } },
   1: { success: true, data: { ...base, name: 'Curado', genres: [{ id: '25', description: 'Aventura' }] } },
 };
 globalThis.fetch = async (url) => {
@@ -50,6 +56,12 @@ globalThis.fetch = async (url) => {
     o[99] = { appid: 99, name: 'Poucas', positive: 5, negative: 0 };
     return ok(o);
   }
+  const tagName = decodeURIComponent((u.match(/request=tag&tag=([^&]+)/) || [])[1] || '');
+  if (tagName === 'Roguelike') return ok({ 30: { appid: 30, name: 'Rogue A', positive: 270, negative: 30 } });
+  if (tagName === 'Roguelite') return ok({ 31: { appid: 31, name: 'Rogue B', positive: 225, negative: 25 }, 32: { appid: 32, name: 'Ruim', positive: 5, negative: 200 } });
+  if (tagName === 'Sexual Content') return ok({ 12: { appid: 12, name: 'Adulto', positive: 900, negative: 100 }, 22: { appid: 22, name: 'Jogo comum com tag', positive: 900, negative: 100 } });
+  if (tagName === 'Hentai') return ok({ 20: { appid: 20, name: 'Adulto B', positive: 400, negative: 50 }, 21: { appid: 21, name: 'Em breve B', positive: 400, negative: 50 } });
+  if (tagName === 'Nudity') throw new Error('rede');
   if (u.includes('request=tag')) return ok({ 10: { appid: 10, name: 'App10', positive: 900, negative: 100 } });
   if (u.includes('request=appdetails')) return ok({ positive: 90, negative: 10, median_forever: 300, tags: { Terror: 100, Indie: 50 } });
   if (u.includes('appdetails?appids=')) {
@@ -65,7 +77,7 @@ globalThis.fetch = async (url) => {
 await main([]);
 const games = JSON.parse(await readFile(path.join(dir, 'games.json'), 'utf8'));
 const ids = games.games.map((g) => g.id).sort((a, b) => a - b);
-assert.deepEqual(ids, [1, 10], 'só curado e jogo válido entram');
+assert.deepEqual(ids, [1, 10, 30], 'só curado e jogo válido entram (30 vem do alias Roguelike, 31 ainda pendente)');
 const g10 = games.games.find((g) => g.id === 10);
 assert.equal(g10.pt, 1);
 assert.ok(g10.genres.includes('terror') && g10.genres.includes('acao'), 'gênero extra via tag');
@@ -78,12 +90,19 @@ assert.equal(blocked[14].r, 'unreleased');
 const sh = JSON.parse(await readFile(path.join(dir, 'details', '10.json'), 'utf8'));
 assert.ok(sh['10'].tags.includes('Terror'));
 const pend = JSON.parse(await readFile(path.join(dir, 'pending.json'), 'utf8'));
-assert.deepEqual(pend.map((x) => x.id), [15], 'candidato não buscado fica pendente');
+assert.deepEqual(pend.map((x) => x.id), [31], 'candidato não buscado fica pendente');
+assert.ok(!ids.includes(32), 'jogo mal avaliado do alias fica de fora');
+const ad = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+const adIds = ad.games.map((g) => g.id).sort((a, b) => a - b);
+assert.deepEqual(adIds, [12, 20, 22], 'catálogo +18: adulto da loja (12, 20) e jogo comum com a tag (22); em breve (21) fica de fora');
+assert.ok(ad.games.every((g) => g.v && !('desc' in g) && !('shots' in g)), 'só dados mínimos, sem descrição nem imagens');
+assert.ok(!games.games.some((g) => [12, 20, 21].includes(g.id)), 'catálogo +18 nunca entra na roleta');
+assert.equal((ad.games.find((g) => g.id === 20)).year, 2022);
 
 /* ---- segunda execução: incremental, não repete ---- */
 const before = calls.store;
 await main([]);
-assert.equal(calls.store - before, 1, 'só o pendente 15 é consultado');
+assert.equal(calls.store - before, 1, 'só o pendente 31 é consultado');
 /* ---- trava de segurança: índice encolhendo ---- */
 process.env.MAX_DETAIL = '500';
 const fake = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, name: 'x' + i, genres: ['acao'] }));

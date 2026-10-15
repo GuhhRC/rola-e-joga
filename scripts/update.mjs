@@ -47,6 +47,11 @@ function settings() {
     detailDelayMs: num(e.DETAIL_DELAY_MS, 1600), // ~200 pedidos a cada 5 min na loja
     spyDelayMs: num(e.SPY_DELAY_MS, 1100),
     ratePauseMs: num(e.RATE_PAUSE_MS, 330000),
+    catalogAdult: e.CATALOG_ADULT !== '0', // catálogo +18 separado; nunca entra na roleta
+    adultMinReviews: num(e.ADULT_MIN_REVIEWS, 200),
+    adultPerTag: num(e.ADULT_PER_TAG, 800),
+    maxAdult: num(e.MAX_ADULT, 300),
+    smallGenreBelow: num(e.SMALL_GENRE_BELOW, 200), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
   };
 }
 
@@ -57,8 +62,15 @@ const COOP_CATS = new Set([9, 38, 39]); // Co-op, Co-op online, Co-op em tela di
 const SHOW_CATS = new Set([1, 2, 9, 24, 28, 36, 37, 38, 39]); // categorias mostradas no card (texto vem da própria Steam)
 const ADULT_DESCRIPTORS = [3, 4]; // conteúdo sexual adulto / nudez frequente
 const ADULT_GENRES = [71, 72]; // Sexual Content, Nudity
+export const ADULT_TAGS = ['Sexual Content', 'Hentai', 'Nudity']; // tags do SteamSpy do catálogo +18
 
 class RateLimited extends Error {}
+const tagsOf = (g) => (Array.isArray(g.steamTags) && g.steamTags.length ? g.steamTags : [g.steamTag]).filter(Boolean);
+const parseSpyList = (data, minReviews, minApproval) => Object.values(data || {}).map((x) => {
+  const pos = x.positive | 0;
+  const total = pos + (x.negative | 0);
+  return { id: +x.appid, name: x.name, total, approval: total ? Math.round((100 * pos) / total) : 0, med: x.median_forever | 0 };
+}).filter((x) => x.id && x.name && x.total >= minReviews && x.approval >= minApproval).sort((a, b) => b.total - a.total);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const readJson = async (f, fallback) => {
@@ -93,7 +105,9 @@ export function parseDetail(d, today) {
   if (d.release_date?.coming_soon) return { block: 'unreleased', until: addDays(today, 14) };
   const gids = (d.genres || []).map((g) => +g.id);
   const cds = (d.content_descriptors?.ids || []).map(Number);
-  if (ADULT_DESCRIPTORS.some((x) => cds.includes(x)) || ADULT_GENRES.some((x) => gids.includes(x))) return { block: 'adult' };
+  const slimBase = { name: d.name || undefined, year: ((String(d.release_date?.date || '').match(/(?:19|20)\d{2}/) || [])[0]) ? +String(d.release_date.date).match(/(?:19|20)\d{2}/)[0] : undefined, free: d.is_free ? 1 : undefined, price: d.price_overview?.final_formatted };
+  const isAdult = ADULT_DESCRIPTORS.some((x) => cds.includes(x)) || ADULT_GENRES.some((x) => gids.includes(x));
+  if (isAdult) return { block: 'adult', adult: slimBase, windows: d.platforms?.windows !== false };
   if (d.platforms && d.platforms.windows === false) return { block: 'no_windows' };
 
   const cats = d.categories || [];
@@ -139,6 +153,7 @@ export function parseDetail(d, today) {
   return {
     detail,
     genres,
+    adultSlim: slimBase,
     slim: { name: d.name || undefined, year: year ? +year : undefined, free: d.is_free ? 1 : undefined, price: price?.f, pt },
   };
 }
@@ -161,7 +176,7 @@ function slimOf(rec) {
   return o;
 }
 
-async function writeAll(S, records, details, blocked, meta, pending = new Map()) {
+async function writeAll(S, records, details, blocked, meta, pending = new Map(), adult = new Map()) {
   await mkdir(path.join(S.data, 'details'), { recursive: true });
   const slim = [...records.values()].map(slimOf).sort((a, b) => a.name.localeCompare(b.name, 'en'));
   const genreCounts = {};
@@ -178,6 +193,9 @@ async function writeAll(S, records, details, blocked, meta, pending = new Map())
     return writeFile(path.join(S.data, 'details', String(n).padStart(2, '0') + '.json'), `{\n${body}\n}\n`);
   }));
   await writeFile(path.join(S.data, 'blocked.json'), JSON.stringify(blocked, null, 0) + '\n');
+  // catálogo +18: separado da roleta, só ids e números
+  const adl = [...adult.values()].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
+  await writeFile(path.join(S.data, 'adult.json'), `{"meta":${JSON.stringify({ updatedAt: new Date().toISOString(), count: adl.length, confirmed: adl.filter((g) => g.v).length })},"games":[\n${adl.map((g) => JSON.stringify(g)).join(',\n')}\n]}\n`);
   // candidatos ainda sem detalhes: ficam guardados para as próximas execuções (não aparecem na roleta)
   const pend = [...pending.values()].map(slimOf).sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
   await writeFile(path.join(S.data, 'pending.json'), `[\n${pend.map((g) => JSON.stringify(g)).join(',\n')}\n]\n`);
@@ -206,6 +224,8 @@ export async function main(argv = process.argv.slice(2)) {
   const details = await loadDetails(S);
   const blocked = await readJson(path.join(S.data, 'blocked.json'), {});
   const prevPending = await readJson(path.join(S.data, 'pending.json'), []);
+  const adultFile = await readJson(path.join(S.data, 'adult.json'), { games: [] });
+  const adult = new Map((adultFile.games || []).filter((g) => g?.id && g.name).map((g) => [g.id, g]));
 
   // registros em memória, a partir do índice anterior (descarta campos do formato antigo)
   const records = new Map();
@@ -231,7 +251,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (argv.includes('--seed-only')) {
     const pend = new Map();
     for (const r of [...records.values()]) if (!curatedIds.has(r.id) && !details.has(r.id)) { pend.set(r.id, r); records.delete(r.id); }
-    await writeAll(S, records, details, blocked, { source: 'seed' }, pend);
+    await writeAll(S, records, details, blocked, { source: 'seed' }, pend, adult);
     return;
   }
 
@@ -239,41 +259,70 @@ export async function main(argv = process.argv.slice(2)) {
 
   /* 1) descoberta (por gênero: quem falhou é tentado de novo na próxima execução) */
   const force = argv.includes('--discover');
+  const weekOld = (iso) => !iso || (Date.now() - new Date(iso)) / 864e5 >= S.discoverEveryDays;
   meta.genreAt = { ...(meta.genreAt || {}) };
-  const dueGenres = genres.filter((g) => force || !meta.genreAt[g.id] || (Date.now() - new Date(meta.genreAt[g.id])) / 864e5 >= S.discoverEveryDays);
-  if (dueGenres.length) {
-    log(`== descoberta (SteamSpy): ${dueGenres.length} gêneros ==`);
-    for (const [i, genre] of dueGenres.entries()) {
+  meta.adultAt = { ...(meta.adultAt || {}) };
+  const dueGenres = genres.filter((g) => force || weekOld(meta.genreAt[g.id]));
+  const dueAdult = S.catalogAdult ? ADULT_TAGS.filter((t) => force || weekOld(meta.adultAt[t])) : [];
+  let spyCalls = 0;
+  const spyList = async (tag) => {
+    if (spyCalls++ > 0) await sleep(S.tagDelayMs);
+    return getJson(`https://steamspy.com/api.php?request=tag&tag=${encodeURIComponent(tag)}`);
+  };
+  if (dueGenres.length || dueAdult.length) {
+    log(`== descoberta (SteamSpy): ${dueGenres.length} gêneros, ${dueAdult.length} tags +18 ==`);
+    for (const genre of dueGenres) {
       if (timeUp()) { log('tempo esgotado na descoberta'); break; }
+      const merged = new Map();
+      for (const tag of tagsOf(genre)) {
+        if (timeUp()) break;
+        try {
+          const data = await spyList(tag);
+          for (const x of parseSpyList(data, S.minReviews, S.minApproval)) merged.set(x.id, x);
+          // gênero pequeno: afrouxa o mínimo de avaliações para a lista não ficar minúscula
+          if (merged.size < S.smallGenreBelow) {
+            const soft = Math.max(100, Math.round(S.minReviews / 3));
+            for (const x of parseSpyList(data, soft, S.minApproval)) if (!merged.has(x.id)) merged.set(x.id, x);
+          }
+        } catch (e) {
+          log(`[${genre.id}] tag "${tag}" falhou (${e.message})`);
+        }
+      }
+      const list = [...merged.values()].sort((a, b) => b.total - a.total).slice(0, S.perGenre);
+      if (!list.length) { log(`[${genre.id}] sem resultado; tenta de novo na próxima execução`); continue; }
+      for (const x of list) {
+        const r = touch(x.id, x.name);
+        r.genres.add(genre.id);
+        r.reviews = x.total;
+        r.approval = x.approval;
+        if (x.med) r.med = x.med;
+      }
+      meta.genreAt[genre.id] = new Date().toISOString();
+      log(`[${genre.id}] ${list.length} jogos`);
+    }
+    // catálogo +18: só guarda ids e números; não entra na roleta
+    for (const tag of dueAdult) {
+      if (timeUp()) break;
       try {
-        const data = await getJson(`https://steamspy.com/api.php?request=tag&tag=${encodeURIComponent(genre.steamTag)}`);
-        const list = Object.values(data || {})
-          .map((x) => {
-            const pos = x.positive | 0;
-            const total = pos + (x.negative | 0);
-            return { id: +x.appid, name: x.name, total, approval: total ? Math.round((100 * pos) / total) : 0, med: x.median_forever | 0 };
-          })
-          .filter((x) => x.id && x.name && x.total >= S.minReviews && x.approval >= S.minApproval)
-          .sort((a, b) => b.total - a.total)
-          .slice(0, S.perGenre);
+        const data = await spyList(tag);
+        const list = parseSpyList(data, S.adultMinReviews, S.minApproval).slice(0, S.adultPerTag);
         if (!list.length) throw new Error('lista vazia');
         for (const x of list) {
-          const r = touch(x.id, x.name);
-          r.genres.add(genre.id);
-          r.reviews = x.total;
-          r.approval = x.approval;
-          if (x.med) r.med = x.med;
+          const e = adult.get(x.id) || { id: x.id, name: x.name };
+          e.tags = [...new Set([...(e.tags || []), tag])];
+          e.reviews = x.total;
+          e.approval = x.approval;
+          adult.set(x.id, e);
         }
-        meta.genreAt[genre.id] = new Date().toISOString();
-        log(`[${genre.id}] ${list.length} jogos`);
+        meta.adultAt[tag] = new Date().toISOString();
+        log(`[+18 ${tag}] ${list.length} jogos`);
       } catch (e) {
-        log(`[${genre.id}] falhou (${e.message}); tenta de novo na próxima execução`);
+        log(`[+18 ${tag}] falhou (${e.message})`);
       }
-      if (i < dueGenres.length - 1) await sleep(S.tagDelayMs);
     }
     meta.discoveredAt = new Date().toISOString();
   } else {
-    log('descoberta pulada (todos os gêneros estão em dia)');
+    log('descoberta pulada (tudo em dia)');
   }
 
   /* 2) detalhes da loja */
@@ -310,6 +359,10 @@ export async function main(argv = process.argv.slice(2)) {
         const p = parseDetail(r.data, today);
         if (p.block) {
           blocked[rec.id] = { r: p.block, ...(p.until ? { until: p.until } : {}) };
+          if (p.block === 'adult' && S.catalogAdult && p.windows) {
+            const old = adult.get(rec.id) || {};
+            adult.set(rec.id, { ...old, id: rec.id, name: p.adult.name || rec.name, reviews: rec.reviews ?? old.reviews, approval: rec.approval ?? old.approval, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today });
+          }
           if (!curatedIds.has(rec.id) || p.block === 'adult') { records.delete(rec.id); details.delete(rec.id); }
           break;
         }
@@ -335,9 +388,56 @@ export async function main(argv = process.argv.slice(2)) {
   }
   log(`detalhes buscados: ${fetched}`);
 
+  /* 2b) confirma os candidatos do catálogo +18 na loja (só nome, ano e preço; sem descrição nem imagens) */
+  if (S.catalogAdult) {
+    const aq = [...adult.values()]
+      .filter((e) => !e.v && !(blocked[e.id] && blocked[e.id].r !== 'adult' && isBlocked(e.id)))
+      .sort((a, b) => (b.reviews || 0) - (a.reviews || 0))
+      .slice(0, S.maxAdult);
+    log(`== catálogo +18: ${aq.length} para confirmar ==`);
+    let strikes = 0;
+    let okAdult = 0;
+    for (const [k, e] of aq.entries()) {
+      if (timeUp()) break;
+      if (k > 0) await sleep(S.detailDelayMs);
+      let r;
+      for (;;) {
+        try {
+          const j = await getJson(`https://store.steampowered.com/api/appdetails?appids=${e.id}&cc=br&l=brazilian`);
+          strikes = 0;
+          r = j?.[e.id];
+          break;
+        } catch (err) {
+          if (err instanceof RateLimited) {
+            if (++strikes >= 3) { log('a Steam bloqueou 3 vezes seguidas; encerrando o catálogo +18'); r = 'abort'; break; }
+            await sleep(S.ratePauseMs);
+            continue;
+          }
+          r = null;
+          break;
+        }
+      }
+      if (r === 'abort') break;
+      if (!r) continue;
+      if (!r.success) { adult.delete(e.id); blocked[e.id] = { r: 'no_store_page', until: addDays(today, 30) }; continue; }
+      const p = parseDetail(r.data, today);
+      if (p.block && p.block !== 'adult') {
+        adult.delete(e.id);
+        blocked[e.id] = { r: p.block, ...(p.until ? { until: p.until } : {}) };
+        continue;
+      }
+      if (p.block === 'adult' && !p.windows) { adult.delete(e.id); continue; }
+      const s2 = p.block ? p.adult : p.adultSlim;
+      Object.assign(e, { name: s2.name || e.name, year: s2.year, free: s2.free, price: s2.price, v: today });
+      for (const key of Object.keys(e)) if (e[key] === undefined) delete e[key];
+      okAdult++;
+    }
+    log(`+18 confirmados: ${okAdult}`);
+  }
+
   /* 3) tags e avaliações por jogo (SteamSpy) */
   log('== tags (SteamSpy) ==');
-  const tagToGenre = new Map(genres.map((g) => [g.steamTag.toLowerCase(), g.id]));
+  const tagToGenre = new Map(genres.flatMap((g) => tagsOf(g).map((t) => [t.toLowerCase(), g.id])));
   const needSpy = [...records.values()]
     .filter((r) => details.has(r.id) && (!details.get(r.id).tags || r.reviews == null))
     .sort((a, b) => (a.reviews == null ? 0 : 1) - (b.reviews == null ? 0 : 1) || (b.reviews || 0) - (a.reviews || 0))
@@ -381,7 +481,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.error(`Abortado: ${records.size} jogos contra ${prevCount} antes. Mantendo os arquivos anteriores.`);
     process.exit(1);
   }
-  await writeAll(S, records, details, blocked, meta, pending);
+  await writeAll(S, records, details, blocked, meta, pending, adult);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

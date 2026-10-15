@@ -528,3 +528,16 @@ body.rec .ad-side, .stage.rec .ad-slot, .stage.rec .consent { display: none !imp
 .more summary::after{content:' +'}
 .more[open] summary::after{content:' −'}
 .more > *{margin-top:10px}
+
+/* boas-vindas */
+.welcome{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.78);backdrop-filter:blur(6px);animation:fade .25s ease-out}
+.welcome-card{width:100%;max-width:340px;text-align:center;background:var(--bg-2);border:1px solid var(--green-dim);border-radius:20px;padding:26px 20px 20px;box-shadow:0 0 60px rgba(46,234,122,.12)}
+.welcome-title{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.welcome-title em{font-style:normal;font-size:.6em;opacity:.7}
+.welcome-title span{color:var(--green)}
+.welcome-lead{margin-top:10px;font-size:14px;color:var(--muted)}
+.welcome-steps{list-style:none;margin:18px 0 20px;padding:0;display:grid;gap:8px;text-align:left}
+.welcome-steps li{padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:12px;font-size:14px}
+.welcome-steps b{color:var(--green);font-family:var(--mono,monospace);margin-right:4px}
+.welcome-by{margin-top:14px;font-size:12px;color:var(--muted)}
+.welcome-by a,.welcome-by b{color:var(--green);font-weight:600;text-decoration:none}

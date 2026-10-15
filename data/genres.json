@@ -7,7 +7,7 @@
   { "id": "simulacao", "label": "Simulação", "steamTag": "Simulation", "intro": "Viver, construir ou operar algo do jeito mais próximo (ou mais exagerado) possível: de fazendas e caminhões a cidades e fábricas." },
   { "id": "corrida", "label": "Corrida", "steamTag": "Racing", "intro": "Do arcade solto ao simulador rígido, passando por mundo aberto cheio de carros. Para quem quer velocidade ou precisão." },
   { "id": "indie", "label": "Indie", "steamTag": "Indie", "intro": "Jogos feitos por equipes pequenas, com ideias que as grandes produtoras raramente arriscam. Muita criatividade por preço baixo." },
-  { "id": "roguelike", "label": "Roguelike", "steamTag": "Roguelike", "intro": "Cada partida é diferente e morrer faz parte. Você evolui a cada tentativa e as runs viram vício." },
+  { "id": "roguelike", "label": "Roguelike", "steamTag": "Roguelike", "steamTags": ["Roguelike", "Roguelite", "Action Roguelike", "Roguelike Deckbuilder"], "intro": "Cada partida é diferente e morrer faz parte. Você evolui a cada tentativa e as runs viram vício." },
   { "id": "metroidvania", "label": "Metroidvania", "steamTag": "Metroidvania", "intro": "Mapa interligado, habilidades que abrem novos caminhos e backtracking recompensador. Exploração e combate, quase sempre em 2D." },
   { "id": "soulslike", "label": "Soulslike", "steamTag": "Souls-like", "intro": "Combate exigente, chefes memoráveis e pouca explicação. Você aprende errando e a vitória vale mais." },
   { "id": "coop", "label": "Co-op", "steamTag": "Co-op", "intro": "Jogos para chamar alguém. Cooperação local ou online, de caos na cozinha a missões de tiro em equipe." },
