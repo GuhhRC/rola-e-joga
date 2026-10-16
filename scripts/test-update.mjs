@@ -6,7 +6,15 @@ import path from 'node:path';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'rej-'));
 Object.assign(process.env, { DATA_DIR: dir, TAG_DELAY_MS: '0', DETAIL_DELAY_MS: '0', SPY_DELAY_MS: '0', RATE_PAUSE_MS: '0', MAX_DETAIL: '8', MIN_REVIEWS: '500' });
-const { main, parseDetail } = await import('./update.mjs');
+const { main, parseDetail, adultByTags } = await import('./update.mjs');
+
+/* ---- regra de tags +18 ---- */
+assert.equal(adultByTags({ 'Sexual Content': 330, Hentai: 220, Nudity: 200, RPG: 137 }).ok, true, 'Celesphonia: sexual no topo');
+assert.deepEqual(adultByTags({ 'Open World': 12801, RPG: 10801, 'Story Rich': 10011, Atmospheric: 6881, Mature: 6825, Fantasy: 6585, Adventure: 6454, Singleplayer: 6287, Nudity: 6129 }).ok, false, 'Witcher 3: Nudity só em 9º lugar');
+assert.equal(adultByTags({ 'Open World': 237, Action: 218, Violent: 98 }).ok, false, 'Valhalla: sem tags sexuais');
+assert.equal(adultByTags([]).ok, false, 'sem dados do SteamSpy');
+assert.equal(adultByTags({ Nudity: 500, Action: 100, NSFW: 80 }).ok, true, 'duas tags sexuais no topo');
+assert.equal(adultByTags({ Hentai: 10, Action: 5 }).ok, false, 'votos insuficientes');
 
 /* ---- parseDetail ---- */
 const base = { type: 'game', name: 'G', release_date: { coming_soon: false, date: '10 de mar. de 2020' }, genres: [{ id: '1', description: 'Ação' }], categories: [{ id: 38, description: 'Co-op online' }, { id: 2, description: 'Um jogador' }], platforms: { windows: true, mac: false, linux: true }, is_free: false, short_description: 'Oi  mundo', screenshots: [{ path_thumbnail: 'http://x/a.jpg?t=1' }], price_overview: { final_formatted: 'R$ 50,00', initial_formatted: 'R$ 100,00', discount_percent: 50 } };
@@ -42,7 +50,8 @@ const store = {
   12: { success: true, data: { ...base, name: 'Adulto', content_descriptors: { ids: [4] } } },
   20: { success: true, data: { ...base, name: 'Adulto B', content_descriptors: { ids: [3] }, release_date: { coming_soon: false, date: '1 de jan. de 2022' } } },
   21: { success: true, data: { ...base, name: 'Em breve B', release_date: { coming_soon: true } } },
-  22: { success: true, data: { ...base, name: 'Jogo comum com tag' } },
+  22: { success: true, data: { ...base, name: 'Celesphonia-like' } },
+  24: { success: true, data: { ...base, name: 'Witcher-like' } },
   30: { success: true, data: { ...base, name: 'Rogue A' } },
   31: { success: true, data: { ...base, name: 'Rogue B' } },
   99: { success: true, data: { ...base, name: 'Velho' } },
@@ -62,8 +71,11 @@ globalThis.fetch = async (url) => {
   if (tagName === 'Roguelite') return ok({ 31: { appid: 31, name: 'Rogue B', positive: 225, negative: 25 }, 32: { appid: 32, name: 'Ruim', positive: 5, negative: 200 } });
   if (tagName === 'Sexual Content') return ok({ 12: { appid: 12, name: 'Adulto', positive: 900, negative: 100 }, 22: { appid: 22, name: 'Jogo comum com tag', positive: 900, negative: 100 } });
   if (tagName === 'Hentai') return ok({ 20: { appid: 20, name: 'Adulto B', positive: 400, negative: 50 }, 21: { appid: 21, name: 'Em breve B', positive: 400, negative: 50 } });
-  if (tagName === 'Nudity') throw new Error('rede');
+  if (tagName === 'Nudity') return ok({ 24: { appid: 24, name: 'Witcher-like', positive: 900, negative: 100 } });
   if (u.includes('request=tag')) return ok({ 10: { appid: 10, name: 'App10', positive: 900, negative: 100 } });
+  if (u.includes('request=appdetails&appid=30')) return ok({ positive: 90, negative: 10, tags: { 'Sexual Content': 300, Hentai: 200, RPG: 100 } });
+  if (u.includes('request=appdetails&appid=22')) return ok({ positive: 90, negative: 10, tags: { 'Sexual Content': 330, Hentai: 220, Nudity: 200, RPG: 137 } });
+  if (u.includes('request=appdetails&appid=24')) return ok({ positive: 90, negative: 10, tags: { 'Open World': 12801, RPG: 10801, 'Story Rich': 10011, Atmospheric: 6881, Mature: 6825, Fantasy: 6585, Adventure: 6454, Singleplayer: 6287, Nudity: 6129 } });
   if (u.includes('request=appdetails')) return ok({ positive: 90, negative: 10, median_forever: 300, tags: { Terror: 100, Indie: 50 } });
   if (u.includes('appdetails?appids=')) {
     calls.store++;
@@ -78,7 +90,7 @@ globalThis.fetch = async (url) => {
 await main([]);
 const games = JSON.parse(await readFile(path.join(dir, 'games.json'), 'utf8'));
 const ids = games.games.map((g) => g.id).sort((a, b) => a - b);
-assert.deepEqual(ids, [1, 10, 30], 'só curado e jogo válido entram (30 vem do alias Roguelike, 31 ainda pendente)');
+assert.deepEqual(ids, [1, 10], 'só curado e jogo válido entram (30 vira +18 pelas tags, 31 ainda pendente)');
 const g10 = games.games.find((g) => g.id === 10);
 assert.equal(g10.pt, 1);
 assert.ok(g10.genres.includes('terror') && g10.genres.includes('acao'), 'gênero extra via tag');
@@ -95,11 +107,13 @@ assert.deepEqual(pend.map((x) => x.id), [31], 'candidato não buscado fica pende
 assert.ok(!ids.includes(32), 'jogo mal avaliado do alias fica de fora');
 const ad = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 const adIds = ad.games.map((g) => g.id).sort((a, b) => a - b);
-assert.deepEqual(adIds, [12, 20], 'catálogo +18: só quem a Steam marca como adulto (12, 20); jogo comum com a tag (22) e em breve (21) ficam de fora');
-assert.ok(ad.rejected['22'], 'jogo comum com a tag fica registrado como rejeitado');
-assert.ok(ad.games.every((g) => g.f === 1));
+assert.deepEqual(adIds, [12, 20, 22, 30], 'catálogo +18: selo da Steam (12, 20), tags fortes (22) e jogo da roleta movido pelas tags (30); em breve (21) fora');
+assert.ok(ad.rejected['24'], 'jogo comum com a tag em posição baixa (24) fica registrado como rejeitado');
+assert.equal(ad.games.find((g) => g.id === 22).f, 2, 'confirmado por tags');
+assert.equal(ad.games.find((g) => g.id === 12).f, 1, 'confirmado pelo selo da Steam');
+assert.ok(ad.games.find((g) => g.id === 30).tags.includes('Sexual Content'));
 assert.ok(ad.games.every((g) => g.v && !('desc' in g) && !('shots' in g)), 'só dados mínimos, sem descrição nem imagens');
-assert.ok(!games.games.some((g) => [12, 20, 21].includes(g.id)), 'catálogo +18 nunca entra na roleta');
+assert.ok(!games.games.some((g) => [12, 20, 21, 22, 30].includes(g.id)), 'catálogo +18 nunca entra na roleta normal');
 assert.equal((ad.games.find((g) => g.id === 20)).year, 2022);
 
 /* ---- segunda execução: incremental, não repete ---- */
@@ -107,8 +121,16 @@ assert.equal((ad.games.find((g) => g.id === 20)).year, 2022);
 const adOld = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 adOld.games.push({ id: 99, name: 'Velho', v: '2026-01-01' });
 await writeFile(path.join(dir, 'adult.json'), JSON.stringify(adOld));
+// jogo que já estava na roleta com tags guardadas (ordem por votos) e tem sexual no topo: sai da roleta normal
+const sh10 = JSON.parse(await readFile(path.join(dir, 'details', '10.json'), 'utf8'));
+sh10['10'].tags = ['Hentai', 'Sexual Content', 'Anime', 'Indie'];
+await writeFile(path.join(dir, 'details', '10.json'), JSON.stringify(sh10));
 const before = calls.store;
 await main([]);
+const g2 = JSON.parse(await readFile(path.join(dir, 'games.json'), 'utf8'));
+assert.ok(!g2.games.some((g) => g.id === 10), 'jogo com tags sexuais no topo sai da roleta normal');
+const ad3 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+assert.ok(ad3.games.some((g) => g.id === 10 && g.f === 2), 'e entra no +18');
 assert.equal(calls.store - before, 2, 'consulta o pendente 31 e reavalia a entrada antiga 99');
 const ad2 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 assert.ok(!ad2.games.some((g) => g.id === 99) && ad2.rejected['99'], 'entrada antiga sem selo da Steam é removida');

@@ -48,7 +48,7 @@ function settings() {
     spyDelayMs: num(e.SPY_DELAY_MS, 1100),
     ratePauseMs: num(e.RATE_PAUSE_MS, 330000),
     catalogAdult: e.CATALOG_ADULT !== '0', // catálogo +18 separado; nunca entra na roleta
-    adultMinReviews: num(e.ADULT_MIN_REVIEWS, 200),
+    adultMinReviews: num(e.ADULT_MIN_REVIEWS, 100),
     adultPerTag: num(e.ADULT_PER_TAG, 800),
     maxAdult: num(e.MAX_ADULT, 500),
     smallGenreBelow: num(e.SMALL_GENRE_BELOW, 200), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
@@ -63,6 +63,24 @@ const SHOW_CATS = new Set([1, 2, 9, 24, 28, 36, 37, 38, 39]); // categorias most
 const ADULT_DESCRIPTORS = [3, 4]; // conteúdo sexual adulto / nudez frequente
 const ADULT_GENRES = [71, 72]; // Sexual Content, Nudity
 export const ADULT_TAGS = ['Sexual Content', 'Hentai', 'Nudity']; // tags do SteamSpy do catálogo +18
+
+/**
+ * Decide se um jogo é "+18" pelos votos de tags do SteamSpy ({tag: votos}).
+ * Jogos comuns costumam ter "Nudity" ou "Sexual Content" com votos, mas bem abaixo das tags principais
+ * (ex.: The Witcher 3 tem Nudity em 9º lugar). Jogo adulto tem essas tags no topo (ex.: Celesphonia: Sexual Content em 1º).
+ * Aceita se Hentai ou Sexual Content estão entre as 5 mais votadas, ou se 2 ou mais tags sexuais estão entre as 8 mais votadas.
+ */
+const SEX_TAGS = ['sexual content', 'hentai', 'nudity', 'nsfw'];
+const CANON = { 'sexual content': 'Sexual Content', hentai: 'Hentai', nudity: 'Nudity' };
+export function adultByTags(votes, minVotes = 30) {
+  if (!votes || Array.isArray(votes)) return { ok: false, tags: [] };
+  const ranked = Object.entries(votes).sort((a, b) => b[1] - a[1]).map(([n, v]) => [String(n).toLowerCase(), v | 0]);
+  const top8 = ranked.slice(0, 8).filter(([n, v]) => SEX_TAGS.includes(n) && v >= minVotes);
+  const top5 = ranked.slice(0, 5).filter(([n, v]) => (n === 'hentai' || n === 'sexual content') && v >= minVotes);
+  const ok = top5.length > 0 || top8.length >= 2;
+  const tags = top8.map(([n]) => CANON[n]).filter(Boolean);
+  return { ok, tags: tags.length ? [...new Set(tags)] : ok ? ['Sexual Content'] : [] };
+}
 
 class RateLimited extends Error {}
 const tagsOf = (g) => (Array.isArray(g.steamTags) && g.steamTags.length ? g.steamTags : [g.steamTag]).filter(Boolean);
@@ -435,12 +453,45 @@ export async function main(argv = process.argv.slice(2)) {
       if (p.block === 'adult' && !p.windows) { adult.delete(e.id); continue; }
       // só entra quem a própria Steam marca como conteúdo sexual/nudez frequente.
       // Estar nas listas de tags do SteamSpy não basta (jogos comuns recebem votos de brincadeira).
-      if (!p.block) { adult.delete(e.id); rejected[e.id] = today; continue; }
-      Object.assign(e, { name: p.adult.name || e.name, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today, f: 1 });
+      let flag = 1;
+      if (!p.block) {
+        // sem selo da Steam: só entra se os votos de tags mostram conteúdo sexual como característica principal
+        let tg = null;
+        try {
+          await sleep(S.spyDelayMs);
+          const sp = await getJson(`https://steamspy.com/api.php?request=appdetails&appid=${e.id}`);
+          tg = adultByTags(sp.tags);
+        } catch (err) {
+          if (err instanceof RateLimited) { log('SteamSpy pediu pausa; encerrando o catálogo +18'); break; }
+          continue; // tenta de novo amanhã
+        }
+        if (!tg.ok) { adult.delete(e.id); rejected[e.id] = today; continue; }
+        flag = 2;
+        e.tags = tg.tags;
+      }
+      Object.assign(e, { name: (p.block ? p.adult : p.adultSlim).name || e.name, year: (p.block ? p.adult : p.adultSlim).year, free: (p.block ? p.adult : p.adultSlim).free, price: (p.block ? p.adult : p.adultSlim).price, v: today, f: flag });
       for (const key of Object.keys(e)) if (e[key] === undefined) delete e[key];
       okAdult++;
     }
     log(`+18 confirmados: ${okAdult}`);
+  }
+
+  /* 2c) jogos que já tinham tags guardadas (sem votos): aplica a mesma regra pela ordem das tags */
+  if (S.catalogAdult) {
+    let moved = 0;
+    for (const rec of [...records.values()]) {
+      const tg = details.get(rec.id)?.tags;
+      if (!tg?.length || curatedIds.has(rec.id)) continue;
+      const at = adultByTags(Object.fromEntries(tg.map((n, i) => [n, 1000 - i])));
+      if (!at.ok) continue;
+      adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, v: today, f: 2 });
+      delete rejected[rec.id];
+      blocked[rec.id] = { r: 'adult' };
+      records.delete(rec.id);
+      details.delete(rec.id);
+      moved++;
+    }
+    if (moved) log(`movidos da roleta normal para o +18 pelas tags: ${moved}`);
   }
 
   /* 3) tags e avaliações por jogo (SteamSpy) */
@@ -463,6 +514,17 @@ export async function main(argv = process.argv.slice(2)) {
       const names = s.tags && !Array.isArray(s.tags)
         ? Object.entries(s.tags).sort((a, b) => b[1] - a[1]).map(([n]) => n)
         : [];
+      // jogo da roleta normal cujas tags principais são sexuais: vai para o catálogo +18
+      const at = S.catalogAdult && !curatedIds.has(rec.id) ? adultByTags(s.tags) : null;
+      if (at?.ok) {
+        adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, v: today, f: 2 });
+        delete rejected[rec.id];
+        blocked[rec.id] = { r: 'adult' };
+        records.delete(rec.id);
+        details.delete(rec.id);
+        spied++;
+        continue;
+      }
       const d = details.get(rec.id);
       d.tags = names.slice(0, 8);
       for (const n of names.slice(0, 12)) {
@@ -480,7 +542,8 @@ export async function main(argv = process.argv.slice(2)) {
   /* 4) só entram na roleta jogos curados ou com detalhes confirmados (filtra DLC, software etc.) */
   const pending = new Map();
   for (const r of [...records.values()]) {
-    if (isBlocked(r.id) && !curatedIds.has(r.id)) records.delete(r.id);
+    if (adult.get(r.id)?.v && adult.get(r.id).f === 2 && !curatedIds.has(r.id)) records.delete(r.id);
+    else if (isBlocked(r.id) && !curatedIds.has(r.id)) records.delete(r.id);
     else if (!curatedIds.has(r.id) && !details.has(r.id)) { pending.set(r.id, r); records.delete(r.id); }
     else if (!r.genres.size) records.delete(r.id);
   }
