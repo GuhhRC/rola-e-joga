@@ -11,7 +11,7 @@ const CREATOR = Object.assign({ name: '@opropriogustavo', role: 'Idealizador', u
 const API_URL = String(window.__API_URL__ || CFG.apiUrl || '').replace(/\/$/, '');
 const ADS = CFG.ads || {};
 const ADULT_BLUR_COVERS = CFG.adultBlurCovers === true; // capas do +18 borradas (padrão: livres)
-const ADULT_BLUR_SHOTS = CFG.adultBlurShots !== false; // miniaturas dos prints no +18 borradas (padrão: sim)
+const ADULT_BLUR_SHOTS = CFG.adultBlurShots === true; // miniaturas dos prints no +18 borradas (padrão: livres)
 const ADS_ON = !!(ADS.enabled && ADS.client);
 const QUANTITIES = [10, 20, 30, 40, 50, 100]; // opções do pop-up
 const WHEEL_MAX = 20; // até aqui: roda circular; acima: slot de capas
