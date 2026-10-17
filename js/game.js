@@ -202,7 +202,8 @@ function gameResult(g, again, opts = {}) {
 
   const btnPlayed = h('button', { class: 'btn ghost' }, lib ? 'Tirar da roleta' : 'Já joguei · tirar');
   const btnChallenge = h('button', { class: 'btn ghost' }, 'Aceitar desafio');
-  const btnShare = h('button', { class: 'btn ghost' }, 'Compartilhar card');
+  const btnShare = h('button', { class: 'btn ghost' }, state.adult ? 'Criar card para compartilhar' : 'Compartilhar card');
+  if (state.adult) { btnShare.style.gridColumn = '1 / -1'; btnShare.classList.add('hot-ghost'); }
   const btnAgain = h('button', { class: 'btn' }, opts.shared ? 'Girar a minha roleta' : 'Girar de novo');
   if (state.adult) { btnAgain.classList.add('hot-ghost'); btnAgain.style.gridColumn = '1 / -1'; }
   const btnCopy = h('button', { class: 'link copy-link' }, 'Copiar texto com link');
@@ -251,7 +252,7 @@ function gameResult(g, again, opts = {}) {
       offers && h('button', { class: 'btn', onclick: () => openOffers(g) }, 'Ver ofertas'),
       !opts.shared && !state.adult && btnPlayed,
       !opts.shared && !state.adult && btnChallenge,
-      !state.adult && btnShare,
+      btnShare,
       !state.adult && btnCopy,
     ),
   ];
