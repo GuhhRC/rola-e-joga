@@ -38,11 +38,12 @@ function settings() {
     minReviews: num(e.MIN_REVIEWS, 500),
     minApproval: num(e.MIN_APPROVAL, 70),
     perGenre: num(e.PER_GENRE, 600),
-    maxDetail: num(e.MAX_DETAIL, 1500),
+    maxDetail: num(e.MAX_DETAIL, 3000), // máximo de jogos consultados por execução (duas execuções por dia)
+    perGenreDetail: num(e.PER_GENRE_DETAIL, 300), // cota mínima por gênero na fila de cada execução
     maxSpy: num(e.MAX_SPY, 500),
     detailMaxAgeDays: num(e.DETAIL_MAX_AGE_DAYS, 30),
     discoverEveryDays: num(e.DISCOVER_EVERY_DAYS, 7),
-    deadlineMin: num(e.DEADLINE_MIN, 150),
+    deadlineMin: num(e.DEADLINE_MIN, 160),
     tagDelayMs: num(e.TAG_DELAY_MS, 65000), // SteamSpy limita pedidos de lista a ~1 por minuto
     detailDelayMs: num(e.DETAIL_DELAY_MS, 1600), // ~200 pedidos a cada 5 min na loja
     spyDelayMs: num(e.SPY_DELAY_MS, 1100),
@@ -52,7 +53,7 @@ function settings() {
     adultPerTag: num(e.ADULT_PER_TAG, 800),
     maxAdult: num(e.MAX_ADULT, 500),
     adultShotsPerRun: num(e.ADULT_SHOTS_PER_RUN, 250), // quantos jogos +18 já confirmados ganham prints por execução
-    smallGenreBelow: num(e.SMALL_GENRE_BELOW, 200), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
+    smallGenreBelow: num(e.SMALL_GENRE_BELOW, 300), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
   };
 }
 
@@ -300,7 +301,10 @@ export async function main(argv = process.argv.slice(2)) {
   const weekOld = (iso) => !iso || (Date.now() - new Date(iso)) / 864e5 >= S.discoverEveryDays;
   meta.genreAt = { ...(meta.genreAt || {}) };
   meta.adultAt = { ...(meta.adultAt || {}) };
-  const dueGenres = genres.filter((g) => force || weekOld(meta.genreAt[g.id]));
+  // gênero com menos jogos que a meta (smallGenreBelow) é procurado de novo todo dia até crescer
+  const genreSize = (id) => [...records.values()].filter((r) => r.genres.has(id)).length;
+  const dayOld = (iso) => !iso || (Date.now() - new Date(iso)) / 864e5 >= 0.9;
+  const dueGenres = genres.filter((g) => force || weekOld(meta.genreAt[g.id]) || (dayOld(meta.genreAt[g.id]) && genreSize(g.id) < S.smallGenreBelow));
   const dueAdult = S.catalogAdult ? ADULT_TAGS.filter((t) => force || weekOld(meta.adultAt[t])) : [];
   let spyCalls = 0;
   const spyList = async (tag) => {
@@ -321,6 +325,10 @@ export async function main(argv = process.argv.slice(2)) {
           if (merged.size < S.smallGenreBelow) {
             const soft = Math.max(100, Math.round(S.minReviews / 3));
             for (const x of parseSpyList(data, soft, S.minApproval)) if (!merged.has(x.id)) merged.set(x.id, x);
+          }
+          // ainda pequeno: último nível de folga (poucas avaliações, mas boa aprovação)
+          if (merged.size < S.smallGenreBelow) {
+            for (const x of parseSpyList(data, Math.max(50, Math.round(S.minReviews / 10)), S.minApproval)) if (!merged.has(x.id)) merged.set(x.id, x);
           }
         } catch (e) {
           log(`[${genre.id}] tag "${tag}" falhou (${e.message})`);
@@ -368,7 +376,7 @@ export async function main(argv = process.argv.slice(2)) {
   log('== detalhes (loja Steam) ==');
   const isBlocked = (id) => blocked[id] && (!blocked[id].until || blocked[id].until > today);
   const stale = (d) => !d || (Date.now() - new Date(d.at)) / 864e5 > S.detailMaxAgeDays;
-  const queue = [...records.values()]
+  const cand = [...records.values()]
     .filter((r) => !isBlocked(r.id) && stale(details.get(r.id)))
     .sort((a, b) => {
       const da = details.get(a.id);
@@ -377,8 +385,23 @@ export async function main(argv = process.argv.slice(2)) {
       const wa = curatedIds.has(a.id) ? 1e12 : a.reviews || 0;
       const wb = curatedIds.has(b.id) ? 1e12 : b.reviews || 0;
       return wb - wa;
-    })
-    .slice(0, S.maxDetail);
+    });
+  // cota por gênero: cada gênero leva até `perGenreDetail` jogos para a fila (gênero pequeno não fica para trás);
+  // o resto da fila é completado pela ordem de popularidade, até `maxDetail`.
+  const picked = new Map();
+  const perG = {};
+  for (const r of cand) {
+    if (picked.size >= S.maxDetail) break;
+    if ([...r.genres].some((g) => (perG[g] || 0) < S.perGenreDetail)) {
+      picked.set(r.id, r);
+      for (const g of r.genres) perG[g] = (perG[g] || 0) + 1;
+    }
+  }
+  for (const r of cand) {
+    if (picked.size >= S.maxDetail) break;
+    picked.set(r.id, r);
+  }
+  const queue = [...picked.values()];
   log(`${queue.length} jogos na fila de hoje`);
 
   let fetched = 0;
