@@ -2,7 +2,8 @@ name: Atualizar lista de jogos
 
 on:
   schedule:
-    - cron: '0 6 * * *' # todo dia, 06:00 UTC (03:00 em Brasília)
+    - cron: '0 6 * * *' # 06:00 UTC = 03:00 em Brasília
+    - cron: '0 18 * * *' # 18:00 UTC = 15:00 em Brasília
   workflow_dispatch: # botão "Run workflow" para rodar na hora
     inputs:
       modo:
