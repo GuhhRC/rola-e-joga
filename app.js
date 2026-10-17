@@ -12,9 +12,11 @@ const CFG = Object.assign(
   { siteName: 'Rola e Joga!', siteLabel: 'Rola e Joga!', siteUrl: '', apiUrl: '', ads: {}, affiliates: [] },
   window.ROLA_CONFIG || {},
 );
-const CREATOR = Object.assign({ name: '@opropriogustavo', role: 'Idealizador', url: '' }, CFG.creator || {});
+const CREATOR = Object.assign({ name: '@opropriogustavo', role: 'Idealizador', url: 'https://www.instagram.com/opropriogustavo/' }, CFG.creator || {});
 const API_URL = String(window.__API_URL__ || CFG.apiUrl || '').replace(/\/$/, '');
 const ADS = CFG.ads || {};
+const ADULT_BLUR_COVERS = CFG.adultBlurCovers === true; // capas do +18 borradas (padrão: livres)
+const ADULT_BLUR_SHOTS = CFG.adultBlurShots !== false; // miniaturas dos prints no +18 borradas (padrão: sim)
 const ADS_ON = !!(ADS.enabled && ADS.client);
 const QUANTITIES = [10, 20, 30, 40, 50, 100]; // opções do pop-up
 const WHEEL_MAX = 20; // até aqui: roda circular; acima: slot de capas
@@ -454,6 +456,7 @@ function setSource(s) {
 }
 
 function showHome() {
+  if (state.adult) { showAdultRoulette(); return; }
   state.view = 'home';
   state.busy = false;
   $back.hidden = true;
@@ -477,26 +480,22 @@ function showHome() {
       h('a', { href: 'privacidade.html' }, 'Privacidade'),
     ),
     h('div', { class: 'foot-note' }, 'Steam é marca da Valve Corporation. Este site não é afiliado à Valve.'),
-    state.adult
-      ? h('div', { class: 'foot-note' }, 'Conteúdo para maiores de 18 anos.')
-      : h('div', { class: 'foot-note credit' }, `${CREATOR.role}: `,
-        h('span', { class: 'at-wrap' }, CREATOR.name,
+    h('div', { class: 'foot-note credit' }, `${CREATOR.role}: `,
+        h('span', { class: 'at-wrap' },
+          CREATOR.url ? h('a', { class: 'at-link', href: CREATOR.url, target: '_blank', rel: 'noopener' }, CREATOR.name) : CREATOR.name,
           h('button', { class: 'secret', 'aria-hidden': 'true', tabindex: '-1', onclick: onSecretTap }))),
   );
 
   mount(
     h('section', {},
       h('div', { class: 'hero hide-rec' },
-        h('h1', {}, state.adult ? 'Modo ' : 'O que vamos jogar ', h('em', {}, state.adult ? '+18' : 'hoje?')),
-        h('p', {}, state.adult
-          ? 'Só para maiores de 18 anos. As capas ficam borradas: toque na capa para ver.'
-          : isLib()
+        h('h1', {}, 'O que vamos jogar ', h('em', {}, 'hoje?')),
+        h('p', {}, isLib()
           ? 'Cole o perfil da Steam e sorteie entre os jogos da biblioteca, inclusive só os que você nunca jogou.'
           : 'Escolha um gênero, defina quantos jogos entram na roleta e jogue o que ela mandar.'),
       ),
-      !state.adult && seg,
+      seg,
       isLib() ? libraryPanel() : catalogPanel(),
-      state.adult && h('button', { class: 'undecided hide-rec', onclick: exitAdult }, 'Sair do modo +18'),
       foot,
     ),
   );
@@ -510,9 +509,6 @@ function genreGrid(genres, extra) {
 }
 
 function catalogPanel() {
-  if (state.adult && !state.genres.length) {
-    return h('div', { class: 'state-msg' }, 'Ainda não há jogos +18 catalogados.', h('br'), h('small', {}, 'A lista é montada pelo robô diário. Volte depois da próxima atualização.'));
-  }
   return h('div', {},
     genreGrid(state.genres),
     h('button', { class: 'undecided', onclick: showGenreWheel }, 'Estou indeciso · girar gêneros'),
@@ -670,6 +666,7 @@ function openQty() {
 
 function startSpin(q) {
   closeModal();
+  if (state.adult) state.adultQty = q;
   state.pool = sample(availableFor(state.genre), q);
   showSpin();
 }
@@ -683,10 +680,13 @@ function showSpin() {
   const useWheel = n <= WHEEL_MAX;
   const engine = useWheel ? createWheel(pool.map((g) => g.name)) : createReel(pool);
 
-  const head = h('div', { class: 'spin-head hide-rec' },
-    h('div', {}, h('span', { class: 'chip' }, state.genre.label), ' ', h('span', { class: 'chip soft' }, `${n} jogos`)),
-    h('button', { class: 'link', onclick: () => openQty() }, 'alterar'),
-  );
+  const head = state.adult
+    ? adultHead(n)
+    : h('div', { class: 'spin-head hide-rec' },
+      h('div', {}, h('span', { class: 'chip' }, state.genre.label), ' ', h('span', { class: 'chip soft' }, `${n} jogos`)),
+      h('button', { class: 'link', onclick: () => openQty() }, 'alterar'),
+    );
+  if (state.adult) $back.hidden = true; // no +18 a saída é o botão "Sair do +18"
 
   mount(
     spinScreen({
@@ -748,7 +748,10 @@ function openOffers(g) {
 /* ---------- detalhes do jogo (carregados sob demanda, 1 arquivo por 100 ids) ---------- */
 const shardCache = new Map();
 function loadDetail(id) {
-  if (state.adult) return Promise.resolve(null); // +18: sem descrição nem prints
+  if (state.adult) { // +18: sem descrição; só os prints que o robô guardou
+    const s = state.byId.get(id)?.shots;
+    return Promise.resolve(s && s.length ? { shots: s } : null);
+  }
   if (window.__DETAILS__) return Promise.resolve(window.__DETAILS__[id] || null);
   const n = String(id % 100).padStart(2, '0');
   if (!shardCache.has(n)) {
@@ -768,7 +771,19 @@ function detailNodes(d, g) {
   if (badges.length) out.push(h('div', { class: 'badges' }, badges));
 
   if (d.shots?.length) {
-    out.push(h('div', { class: 'shots' }, d.shots.map((u) => h('img', { src: u, alt: '', loading: 'lazy', decoding: 'async', onerror: (e) => e.target.remove() }))));
+    const blur = state.adult && ADULT_BLUR_SHOTS;
+    out.push(h('div', { class: 'shots' + (blur ? ' blurred' : '') },
+      d.shots.map((u, i) => {
+        const b = h('button', { class: 'shot', type: 'button', 'aria-label': `Print ${i + 1} de ${d.shots.length}` },
+          h('img', { src: u, alt: '', loading: 'lazy', decoding: 'async', onerror: (e) => { b.remove(); } }));
+        b.addEventListener('click', () => {
+          if (blur && !b.classList.contains('rev')) { b.classList.add('rev'); return; } // 1º toque revela, 2º amplia
+          openViewer(d.shots, i);
+        });
+        return b;
+      }),
+    ));
+    if (blur) out.push(h('p', { class: 'shots-hint' }, 'Toque num print para ver; toque de novo para ampliar.'));
   }
 
   // o resto fica recolhido, para o card não ficar enorme
@@ -821,6 +836,7 @@ function gameResult(g, again, opts = {}) {
   const btnChallenge = h('button', { class: 'btn ghost' }, 'Aceitar desafio');
   const btnShare = h('button', { class: 'btn ghost' }, 'Compartilhar card');
   const btnAgain = h('button', { class: 'btn' }, opts.shared ? 'Girar a minha roleta' : 'Girar de novo');
+  if (state.adult) { btnAgain.classList.add('hot-ghost'); btnAgain.style.gridColumn = '1 / -1'; }
   const btnCopy = h('button', { class: 'link copy-link' }, 'Copiar texto com link');
   btnCopy.addEventListener('click', async () => { toast((await copyText(shareText(g))) ? 'Texto com link copiado.' : 'Não consegui copiar.'); });
 
@@ -849,18 +865,20 @@ function gameResult(g, again, opts = {}) {
   });
 
   return [
-    h('article', { class: 'card' },
-      h('div', { class: 'cover', onclick: (e) => e.currentTarget.classList.toggle('show') }, coverImg(g)),
+    h('article', { class: 'card' + (state.adult ? ' adult-card' : '') },
+      h('div', { class: 'cover', onclick: (e) => e.currentTarget.classList.toggle('show') }, coverImg(g), state.adult && h('span', { class: 'age-badge' }, '+18')),
       h('div', { class: 'card-body' },
         h('h2', {}, g.name),
         h('div', { class: 'stats' }, statNodes(g)),
-        tags.length > 0 && h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))),
+        state.adult
+          ? (g.tags || []).length > 0 && h('div', { class: 'tags' }, g.tags.map((t) => h('span', { class: 'chip hot' }, ADULT_TAG_PT[t] || t)))
+          : tags.length > 0 && h('div', { class: 'tags' }, tags.map((t) => h('span', { class: 'chip soft' }, t))),
         g.desc && h('p', { class: 'desc' }, g.desc),
         extra,
       ),
     ),
     h('div', { class: 'actions hide-rec' },
-      h('a', { class: 'btn primary', href: storeUrl(g.id), target: '_blank', rel: 'noopener' }, 'Abrir na Steam'),
+      h('a', { class: 'btn primary' + (state.adult ? ' steam-hot' : ''), href: storeUrl(g.id), target: '_blank', rel: 'noopener' }, state.adult ? 'Abrir na Steam ↗' : 'Abrir na Steam'),
       btnAgain,
       offers && h('button', { class: 'btn', onclick: () => openOffers(g) }, 'Ver ofertas'),
       !opts.shared && !state.adult && btnPlayed,
@@ -1345,6 +1363,14 @@ $('#btnSound').addEventListener('click', () => {
 $back.addEventListener('click', () => { if (!state.busy) showHome(); });
 
 document.addEventListener('keydown', (e) => {
+  if (viewer) { // visualizador de prints tem prioridade
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowRight') viewer.go(1);
+    else if (e.key === 'ArrowLeft') viewer.go(-1);
+    else return;
+    e.preventDefault();
+    return;
+  }
   if (e.key === 'Escape') {
     if (!modal.hidden) closeModal();
     else if (!drawer.hidden) closeLists();
@@ -1377,6 +1403,8 @@ const ADULT_GENRES = [
   { id: 'hentai', label: 'Hentai', tag: 'Hentai' },
   { id: 'nudez', label: 'Nudez', tag: 'Nudity' },
 ];
+const ADULT_TAG_PT = { 'Sexual Content': 'Conteúdo sexual', Hentai: 'Hentai', Nudity: 'Nudez', NSFW: 'NSFW' };
+const ADULT_DEFAULT_QTY = 20;
 let armTimer = 0;
 let lastLogoTap = 0;
 
@@ -1390,9 +1418,11 @@ function disarm() {
   clearTimeout(armTimer);
   document.body.classList.remove('armed');
 }
+// o botão escondido só recebe o toque depois do toque duplo no ícone; antes disso o toque cai no link do Instagram
 function onSecretTap(e) {
   e.stopPropagation();
   if (!document.body.classList.contains('armed') || state.adult) return;
+  e.preventDefault();
   disarm();
   openAdultGate();
 }
@@ -1411,18 +1441,25 @@ function openAdultGate() {
   openModal(sheet);
 }
 
+const shotThumb = (id, t) => (/^https?:/.test(t) ? t : `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/${t}.116x65.jpg`);
+
 async function enterAdult() {
   closeModal();
   let list = [];
   try {
     const r = window.__ADULT__ ? window.__ADULT__ : await fetch('data/adult.json', { cache: 'no-cache' }).then((x) => (x.ok ? x.json() : { games: [] }));
-    list = (r.games || []).filter((g) => g && g.id && g.name && g.v && g.f); // só os confirmados pelo selo da Steam
+    list = (r.games || []).filter((g) => g && g.id && g.name && g.v && g.f); // só os confirmados
   } catch { list = []; }
   const tagId = new Map(ADULT_GENRES.map((g) => [g.tag, g.id]));
-  const games = list.map((g) => ({
-    id: g.id, name: g.name, approval: g.approval, reviews: g.reviews, year: g.year, free: g.free, price: g.price,
-    genres: (g.tags || []).map((t) => tagId.get(t)).filter(Boolean).length ? (g.tags || []).map((t) => tagId.get(t)).filter(Boolean) : ['sexual'],
-  }));
+  const games = list.map((g) => {
+    const ids = (g.tags || []).map((t) => tagId.get(t)).filter(Boolean);
+    return {
+      id: g.id, name: g.name, approval: g.approval, reviews: g.reviews, year: g.year, free: g.free, price: g.price,
+      tags: g.tags || [],
+      shots: (g.s || []).map((t) => shotThumb(g.id, t)),
+      genres: ids.length ? ids : ['sexual'],
+    };
+  });
   state.normal = { games: state.games, byId: state.byId, genres: state.genres, baseGenres: state.baseGenres, source: state.source };
   state.games = games;
   state.byId = new Map(games.map((g) => [g.id, g]));
@@ -1430,15 +1467,119 @@ async function enterAdult() {
   state.genres = ADULT_GENRES.map((g) => ({ ...g, count: games.filter((x) => x.genres.includes(g.id)).length })).filter((g) => g.count > 0);
   state.source = 'catalog';
   state.adult = true;
+  state.adultQty = ADULT_DEFAULT_QTY;
+  state.genre = null;
   document.body.classList.add('adult');
-  showHome();
+  document.body.classList.toggle('blur-covers', ADULT_BLUR_COVERS);
+  showHome(); // no +18 isso abre a roleta direto
 }
 
 function exitAdult() {
-  if (!state.normal) return;
-  Object.assign(state, state.normal, { adult: false, normal: null });
-  document.body.classList.remove('adult', 'armed');
+  if (!state.normal || state.busy) return;
+  closeViewer();
+  Object.assign(state, state.normal, { adult: false, normal: null, genre: null, pool: [] });
+  document.body.classList.remove('adult', 'armed', 'blur-covers');
   showHome();
+}
+
+// +18: a home já é a roleta, com todos os jogos (ou só os do filtro escolhido)
+function adultAll() { return { id: 'todos', label: 'Todos', count: state.games.length }; }
+function showAdultRoulette(genre) {
+  if (!state.games.length) {
+    state.view = 'home';
+    $back.hidden = true;
+    mount(h('section', {},
+      h('div', { class: 'state-msg' }, 'Ainda não há jogos +18 catalogados.', h('br'), h('small', {}, 'A lista é montada pelo robô diário. Volte depois da próxima atualização.')),
+      h('button', { class: 'exit-adult', style: 'display:block;margin:0 auto', onclick: exitAdult }, 'Sair do +18'),
+    ));
+    return;
+  }
+  state.genre = genre || state.genre || adultAll();
+  const avail = availableFor(state.genre);
+  state.pool = sample(avail, Math.min(state.adultQty || ADULT_DEFAULT_QTY, avail.length));
+  showSpin();
+}
+
+function adultHead(n) {
+  const chips = [adultAll(), ...state.genres];
+  return h('div', { class: 'spin-head adult-head hide-rec' },
+    h('div', { class: 'filters' },
+      chips.map((g) => h('button', {
+        class: 'chipbtn' + (state.genre?.id === g.id ? ' on' : ''),
+        onclick: () => { if (!state.busy && state.genre?.id !== g.id) showAdultRoulette(g); },
+      }, `${g.label} (${availableFor(g).length})`)),
+    ),
+    h('div', { class: 'adult-row' },
+      h('span', { class: 'chip soft' }, `${n} na roleta`),
+      h('button', { class: 'link', onclick: () => { if (!state.busy) openQty(); } }, 'alterar'),
+      h('button', { class: 'exit-adult', onclick: exitAdult }, 'Sair do +18'),
+    ),
+  );
+}
+
+/* ==========================================================================
+   Visualizador de prints em tela cheia (setas, teclado, deslize, toque fora fecha)
+   ========================================================================== */
+const hiRes = (u) => String(u).replace(/\.\d+x\d+(\.[a-z]+)$/i, '.1920x1080$1');
+let viewer = null;
+
+function openViewer(urls, start = 0) {
+  closeViewer();
+  const list = urls.filter(Boolean);
+  if (!list.length) return;
+  let i = Math.max(0, Math.min(start, list.length - 1));
+
+  const low = h('img', { class: 'vwr-low', alt: '', draggable: 'false' });
+  const hi = h('img', { class: 'vwr-hi', alt: 'Print do jogo', draggable: 'false' });
+  const count = h('div', { class: 'vwr-count', 'aria-live': 'polite' });
+  const prev = h('button', { class: 'vwr-nav prev', type: 'button', 'aria-label': 'Anterior' }, '‹');
+  const next = h('button', { class: 'vwr-nav next', type: 'button', 'aria-label': 'Próximo' }, '›');
+  const close = h('button', { class: 'vwr-close', type: 'button', 'aria-label': 'Fechar' }, '✕');
+  const fig = h('div', { class: 'vwr-fig' }, low, hi);
+  const root = h('div', { class: 'vwr', role: 'dialog', 'aria-label': 'Prints do jogo', 'aria-modal': 'true' }, fig, count, close, prev, next);
+
+  function show(n) {
+    i = (n + list.length) % list.length;
+    const thumb = list[i];
+    count.textContent = `${i + 1}/${list.length}`;
+    prev.hidden = next.hidden = list.length < 2;
+    hi.classList.remove('ok');
+    low.src = thumb; // miniatura aparece na hora, o print grande entra por cima
+    let tried = false;
+    hi.onload = () => hi.classList.add('ok');
+    hi.onerror = () => { if (!tried) { tried = true; hi.src = thumb; } else hi.classList.add('ok'); };
+    hi.src = hiRes(thumb);
+    for (const d of [1, -1]) { const im = new Image(); im.src = hiRes(list[(i + d + list.length) % list.length]); } // pré-carrega vizinhos
+  }
+  const go = (d) => show(i + d);
+
+  prev.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
+  next.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
+  close.addEventListener('click', (e) => { e.stopPropagation(); closeViewer(); });
+  root.addEventListener('click', (e) => { if (e.target === root || e.target === fig) closeViewer(); }); // toque fora da imagem
+
+  // deslize
+  let sx = 0; let sy = 0; let tracking = false;
+  root.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; tracking = true; sx = e.clientX; sy = e.clientY; });
+  root.addEventListener('pointerup', (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.clientX - sx; const dy = e.clientY - sy;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) { go(dx < 0 ? 1 : -1); root.dataset.swiped = '1'; setTimeout(() => delete root.dataset.swiped, 50); }
+  });
+  root.addEventListener('pointercancel', () => { tracking = false; });
+  root.addEventListener('click', (e) => { if (root.dataset.swiped) e.stopImmediatePropagation(); }, true);
+
+  viewer = { root, go };
+  stage.append(root);
+  show(i);
+  close.focus({ preventScroll: true });
+}
+
+function closeViewer() {
+  if (!viewer) return;
+  viewer.root.remove();
+  viewer = null;
 }
 
 /* ---------- jogo compartilhado (#j=<id>) ---------- */

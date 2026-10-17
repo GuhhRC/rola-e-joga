@@ -88,7 +88,7 @@ const sobre = `
 <p>O catálogo é montado a partir de dados públicos da Steam e do SteamSpy. Só entram jogos com um mínimo de avaliações e boa aprovação, e a lista é atualizada todos os dias. Na última atualização havia ${games.length} jogos, em ${esc(updated.toLocaleDateString('pt-BR'))}.</p>
 
 <h2>Quem fez</h2>
-<p>${esc((CFG.creator && CFG.creator.role) || 'Idealizador')}: ${esc((CFG.creator && CFG.creator.name) || '@opropriogustavo')}.</p>
+<p>${esc((CFG.creator && CFG.creator.role) || 'Idealizador')}: <a href="${esc((CFG.creator && CFG.creator.url) || 'https://www.instagram.com/opropriogustavo/')}" target="_blank" rel="noopener">${esc((CFG.creator && CFG.creator.name) || '@opropriogustavo')}</a>.</p>
 
 <h2>Sobre a Steam</h2>
 <p>Steam é marca da Valve Corporation. O ${esc(CFG.siteName)} é um projeto independente, sem vínculo com a Valve. Nomes, capas e descrições dos jogos pertencem aos seus donos.</p>

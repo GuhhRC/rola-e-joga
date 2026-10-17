@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'rej-'));
 Object.assign(process.env, { DATA_DIR: dir, TAG_DELAY_MS: '0', DETAIL_DELAY_MS: '0', SPY_DELAY_MS: '0', RATE_PAUSE_MS: '0', MAX_DETAIL: '8', MIN_REVIEWS: '500' });
-const { main, parseDetail, adultByTags } = await import('./update.mjs');
+const { main, parseDetail, adultByTags, shotTokens } = await import('./update.mjs');
 
 /* ---- regra de tags +18 ---- */
 assert.equal(adultByTags({ 'Sexual Content': 330, Hentai: 220, Nudity: 200, RPG: 137 }).ok, true, 'Celesphonia: sexual no topo');
@@ -33,6 +33,10 @@ assert.equal(p.slim.year, 2020);
 assert.equal(p.detail.price.d, 50);
 assert.equal(p.detail.shots[0], 'http://x/a.jpg');
 assert.deepEqual(p.detail.plat, ['win', 'lin']);
+
+/* ---- prints do +18 ---- */
+assert.deepEqual(shotTokens(['https://cdn.cloudflare.steamstatic.com/steam/apps/7/ss_abc123.116x65.jpg?t=1', 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/7/ss_def.116x65.jpg?t=2', '', 'http://x/y.jpg', 'a', 'b']), ['ss_abc123', 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/7/ss_def.116x65.jpg', 'http://x/y.jpg', 'a']);
+assert.deepEqual(parseDetail({ ...base, content_descriptors: { ids: [3] } }, '2026-01-01').adult.s, ['http://x/a.jpg']);
 
 /* ---- fluxo completo com fetch falso ---- */
 await mkdir(dir, { recursive: true });
@@ -115,6 +119,8 @@ assert.ok(ad.games.find((g) => g.id === 30).tags.includes('Sexual Content'));
 assert.ok(ad.games.every((g) => g.v && !('desc' in g) && !('shots' in g)), 'só dados mínimos, sem descrição nem imagens');
 assert.ok(!games.games.some((g) => [12, 20, 21, 22, 30].includes(g.id)), 'catálogo +18 nunca entra na roleta normal');
 assert.equal((ad.games.find((g) => g.id === 20)).year, 2022);
+assert.deepEqual(ad.games.find((g) => g.id === 20).s, ['http://x/a.jpg'], 'prints do +18 guardados (URL inteira quando não é o endereço antigo)');
+assert.deepEqual(ad.games.find((g) => g.id === 12).s, ['http://x/a.jpg']);
 
 /* ---- segunda execução: incremental, não repete ---- */
 // entrada antiga (confirmada só pela tag, sem selo) precisa ser reavaliada e sair
@@ -134,6 +140,15 @@ assert.ok(ad3.games.some((g) => g.id === 10 && g.f === 2), 'e entra no +18');
 assert.equal(calls.store - before, 2, 'consulta o pendente 31 e reavalia a entrada antiga 99');
 const ad2 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 assert.ok(!ad2.games.some((g) => g.id === 99) && ad2.rejected['99'], 'entrada antiga sem selo da Steam é removida');
+/* ---- prints do +18 para quem já estava confirmado sem prints ---- */
+const adBf = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+for (const g of adBf.games) if (g.id === 20) delete g.s;
+await writeFile(path.join(dir, 'adult.json'), JSON.stringify(adBf));
+const beforeBf = calls.store;
+await main([]);
+const adBf2 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
+assert.deepEqual(adBf2.games.find((g) => g.id === 20).s, ['http://x/a.jpg'], 'prints preenchidos depois');
+assert.ok(calls.store - beforeBf >= 1, 'consultou a loja para completar os prints');
 /* ---- trava de segurança: índice encolhendo ---- */
 process.env.MAX_DETAIL = '500';
 const fake = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, name: 'x' + i, genres: ['acao'] }));

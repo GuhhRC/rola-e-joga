@@ -51,6 +51,7 @@ function settings() {
     adultMinReviews: num(e.ADULT_MIN_REVIEWS, 100),
     adultPerTag: num(e.ADULT_PER_TAG, 800),
     maxAdult: num(e.MAX_ADULT, 500),
+    adultShotsPerRun: num(e.ADULT_SHOTS_PER_RUN, 250), // quantos jogos +18 já confirmados ganham prints por execução
     smallGenreBelow: num(e.SMALL_GENRE_BELOW, 200), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
   };
 }
@@ -117,13 +118,28 @@ async function getJson(url, tries = 3) {
   }
 }
 
+/* ---------- prints do +18 ----------
+   Guardamos só o "ss_<hash>" quando a miniatura está no endereço antigo da Steam (o app monta a URL);
+   em qualquer outro endereço guardamos a URL inteira, sem o ?t=. Máximo de 4 por jogo. */
+export function shotTokens(list) {
+  const out = [];
+  for (const u of list || []) {
+    const url = String(u || '').split('?')[0];
+    if (!url) continue;
+    const m = url.match(/^https?:\/\/cdn\.(?:cloudflare|akamai)\.steamstatic\.com\/steam\/apps\/\d+\/(ss_[0-9a-f]+)\.\d+x\d+\.jpg$/i);
+    out.push(m ? m[1] : url);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
 /* ---------- interpretação da resposta da loja ---------- */
 export function parseDetail(d, today) {
   if (!d || d.type !== 'game') return { block: 'not_game' };
   if (d.release_date?.coming_soon) return { block: 'unreleased', until: addDays(today, 14) };
   const gids = (d.genres || []).map((g) => +g.id);
   const cds = (d.content_descriptors?.ids || []).map(Number);
-  const slimBase = { name: d.name || undefined, year: ((String(d.release_date?.date || '').match(/(?:19|20)\d{2}/) || [])[0]) ? +String(d.release_date.date).match(/(?:19|20)\d{2}/)[0] : undefined, free: d.is_free ? 1 : undefined, price: d.price_overview?.final_formatted };
+  const slimBase = { name: d.name || undefined, year: ((String(d.release_date?.date || '').match(/(?:19|20)\d{2}/) || [])[0]) ? +String(d.release_date.date).match(/(?:19|20)\d{2}/)[0] : undefined, free: d.is_free ? 1 : undefined, price: d.price_overview?.final_formatted, s: shotTokens((d.screenshots || []).map((x) => x.path_thumbnail)) };
   const isAdult = ADULT_DESCRIPTORS.some((x) => cds.includes(x)) || ADULT_GENRES.some((x) => gids.includes(x));
   if (isAdult) return { block: 'adult', adult: slimBase, windows: d.platforms?.windows !== false };
   if (d.platforms && d.platforms.windows === false) return { block: 'no_windows' };
@@ -384,7 +400,7 @@ export async function main(argv = process.argv.slice(2)) {
           blocked[rec.id] = { r: p.block, ...(p.until ? { until: p.until } : {}) };
           if (p.block === 'adult' && S.catalogAdult && p.windows) {
             const old = adult.get(rec.id) || {};
-            adult.set(rec.id, { ...old, id: rec.id, name: p.adult.name || rec.name, reviews: rec.reviews ?? old.reviews, approval: rec.approval ?? old.approval, year: p.adult.year, free: p.adult.free, price: p.adult.price, v: today, f: 1 });
+            adult.set(rec.id, { ...old, id: rec.id, name: p.adult.name || rec.name, reviews: rec.reviews ?? old.reviews, approval: rec.approval ?? old.approval, year: p.adult.year, free: p.adult.free, price: p.adult.price, s: p.adult.s, v: today, f: 1 });
             delete rejected[rec.id];
           }
           if (!curatedIds.has(rec.id) || p.block === 'adult') { records.delete(rec.id); details.delete(rec.id); }
@@ -469,11 +485,38 @@ export async function main(argv = process.argv.slice(2)) {
         flag = 2;
         e.tags = tg.tags;
       }
-      Object.assign(e, { name: (p.block ? p.adult : p.adultSlim).name || e.name, year: (p.block ? p.adult : p.adultSlim).year, free: (p.block ? p.adult : p.adultSlim).free, price: (p.block ? p.adult : p.adultSlim).price, v: today, f: flag });
+      Object.assign(e, { name: (p.block ? p.adult : p.adultSlim).name || e.name, year: (p.block ? p.adult : p.adultSlim).year, free: (p.block ? p.adult : p.adultSlim).free, price: (p.block ? p.adult : p.adultSlim).price, s: (p.block ? p.adult : p.adultSlim).s, v: today, f: flag });
       for (const key of Object.keys(e)) if (e[key] === undefined) delete e[key];
       okAdult++;
     }
     log(`+18 confirmados: ${okAdult}`);
+  }
+
+  /* 2b-2) prints dos jogos +18 já confirmados que ainda não têm (para o visualizador em tela cheia) */
+  if (S.catalogAdult && S.adultShotsPerRun > 0) {
+    const need = [...adult.values()].filter((e) => e.v && e.f && e.s === undefined).sort((a, b) => (b.reviews || 0) - (a.reviews || 0)).slice(0, S.adultShotsPerRun);
+    if (need.length) log(`== prints do +18: ${need.length} jogos ==`);
+    let got = 0;
+    let strikes = 0;
+    for (const [k, e] of need.entries()) {
+      if (timeUp()) break;
+      if (k > 0) await sleep(S.detailDelayMs);
+      try {
+        const j = await getJson(`https://store.steampowered.com/api/appdetails?appids=${e.id}&cc=br&l=brazilian`);
+        strikes = 0;
+        const r = j?.[e.id];
+        e.s = r?.success ? shotTokens((r.data?.screenshots || []).map((x) => x.path_thumbnail)) : []; // [] = já consultado, sem prints
+        if (e.s.length) got++;
+      } catch (err) {
+        if (err instanceof RateLimited) {
+          if (++strikes >= 3) { log('a Steam bloqueou 3 vezes seguidas; encerrando os prints do +18'); break; }
+          await sleep(S.ratePauseMs);
+          continue;
+        }
+        /* tenta de novo amanhã */
+      }
+    }
+    if (need.length) log(`+18 com prints: ${got}`);
   }
 
   /* 2c) jogos que já tinham tags guardadas (sem votos): aplica a mesma regra pela ordem das tags */
@@ -484,7 +527,7 @@ export async function main(argv = process.argv.slice(2)) {
       if (!tg?.length || curatedIds.has(rec.id)) continue;
       const at = adultByTags(Object.fromEntries(tg.map((n, i) => [n, 1000 - i])));
       if (!at.ok) continue;
-      adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, v: today, f: 2 });
+      adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, s: shotTokens(details.get(rec.id)?.shots), v: today, f: 2 });
       delete rejected[rec.id];
       blocked[rec.id] = { r: 'adult' };
       records.delete(rec.id);
@@ -517,7 +560,7 @@ export async function main(argv = process.argv.slice(2)) {
       // jogo da roleta normal cujas tags principais são sexuais: vai para o catálogo +18
       const at = S.catalogAdult && !curatedIds.has(rec.id) ? adultByTags(s.tags) : null;
       if (at?.ok) {
-        adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, v: today, f: 2 });
+        adult.set(rec.id, { ...(adult.get(rec.id) || {}), id: rec.id, name: rec.name, tags: at.tags, reviews: rec.reviews, approval: rec.approval, year: rec.year, free: rec.free, price: rec.price, s: shotTokens(details.get(rec.id)?.shots), v: today, f: 2 });
         delete rejected[rec.id];
         blocked[rec.id] = { r: 'adult' };
         records.delete(rec.id);
