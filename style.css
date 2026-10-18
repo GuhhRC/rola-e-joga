@@ -609,3 +609,15 @@ body.adult .chipbtn.on{color:#1a0508;background:var(--green);border-color:var(--
 .btn.steam-hot:hover{background:linear-gradient(180deg,#ff7080,#e8283f)}
 .btn.hot-ghost{background:transparent;color:#ffc2c8;border-color:var(--green-dim)}
 .btn.hot-ghost:hover{border-color:var(--green);color:#fff}
+
+/* ---------- resultado da roleta de gêneros: resumo + exemplos ---------- */
+.genre-intro{margin-top:10px;font-size:14px;line-height:1.55;color:#c9d6cd}
+.genre-count{margin-top:10px;font:600 12px var(--mono);color:var(--muted)}
+.genre-ex{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)}
+.genre-ex-title{font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+.genre-ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.genre-ex-item{min-width:0}
+.genre-ex-cover{aspect-ratio:460/215;border-radius:8px;overflow:hidden;background:#0c110e;border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center}
+.genre-ex-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.genre-ex-cover .noimg{font-size:10px;padding:4px;text-align:center;color:var(--muted)}
+.genre-ex-item span{display:block;margin-top:6px;font-size:11.5px;line-height:1.3;color:#b6c4bb;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}

@@ -276,12 +276,23 @@ function showGenreWheel() {
       ctaText: 'Girar gêneros',
       renderResult: (idx, again) => {
         const g = gs[idx];
+        const examples = sample(availableFor(g), 3); // exemplos aleatórios a cada giro
         return [
           h('article', { class: 'card' },
             h('div', { class: 'card-body' },
               h('div', { class: 'mono muted', style: 'font-size:11px;letter-spacing:.14em' }, 'O GÊNERO DA VEZ É'),
               h('h2', { style: 'font-size:30px;margin-top:6px;color:var(--green)' }, g.label),
-              h('p', { class: 'desc' }, `${g.count} jogos ${isLib() ? 'na seleção' : 'na lista'}.`),
+              g.intro && h('p', { class: 'genre-intro' }, g.intro),
+              h('p', { class: 'genre-count' }, `${g.count} jogos ${isLib() ? 'na seleção' : 'na lista'}.`),
+              examples.length > 0 && h('div', { class: 'genre-ex' },
+                h('div', { class: 'genre-ex-title' }, 'Alguns jogos desse gênero'),
+                h('div', { class: 'genre-ex-grid' },
+                  examples.map((x) => h('div', { class: 'genre-ex-item', title: x.name },
+                    h('div', { class: 'genre-ex-cover' }, coverImg(x)),
+                    h('span', {}, x.name),
+                  )),
+                ),
+              ),
             ),
           ),
           h('div', { class: 'actions hide-rec' },
