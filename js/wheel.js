@@ -125,6 +125,10 @@ function createReel(pool) {
   const frame = h('div', { class: 'reel-frame' });
   const el = h('div', { class: 'reel' }, strip, frame, h('div', { class: 'reel-fade top' }), h('div', { class: 'reel-fade bot' }));
   let current = pool[Math.floor(rnd() * n)];
+  // nome do jogo que está passando no centro (muda conforme o slot gira)
+  const nameEl = h('div', { class: 'reel-name', 'aria-live': 'off' });
+  const box = h('div', { class: 'reel-box' }, el, nameEl);
+  const setName = (g) => { if (g && nameEl.textContent !== g.name) nameEl.textContent = g.name; };
 
   const pickNot = (g) => {
     let p;
@@ -133,13 +137,14 @@ function createReel(pool) {
   };
   const setPos = (p) => { strip.style.transform = `translateY(${(REEL_ROW * (1 - p)).toFixed(2)}px)`; };
   const build = (seq) => strip.replaceChildren(...seq.map((g) => h('div', { class: 'reel-item' }, coverImg(g))));
-  const rest = () => { build([pickNot(current), current, pickNot(current)]); setPos(1); };
+  const rest = () => { nameEl.classList.remove('win'); build([pickNot(current), current, pickNot(current)]); setPos(1); setName(current); };
   rest();
 
   return {
-    el,
+    el: box,
     async spin(w) {
       frame.classList.remove('win');
+      nameEl.classList.remove('win');
       const winner = pool[w];
       const win = 40 + Math.floor(rnd() * 6);
       const seq = [pickNot(current), current];
@@ -156,12 +161,15 @@ function createReel(pool) {
         const i = Math.round(p);
         if (i !== last) {
           last = i;
+          setName(seq[i]);
           const t = performance.now();
           if (t - lastTick > 32) { tick(); lastTick = t; }
         }
       });
       setPos(win);
       current = winner;
+      setName(winner);
+      nameEl.classList.add('win');
       frame.classList.add('win');
     },
     reset() { frame.classList.remove('win'); rest(); },
