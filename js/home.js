@@ -84,7 +84,10 @@ const LIB_ERRORS = {
   no_games: { text: 'Este perfil é público, mas não tem jogos na biblioteca.' },
   rate_limited: { text: 'A Steam pediu uma pausa. Tente de novo em instantes.' },
   unconfigured: { text: 'A busca por perfil ainda não foi ativada neste site.' },
-  fallback: { text: 'Não consegui falar com a Steam agora. Tente de novo em instantes.' },
+  upstream: { text: 'A Steam não respondeu agora. Tente de novo em instantes.' },
+  network: { text: 'Não consegui falar com o servidor da roleta. Confira sua internet e tente de novo.' },
+  server_config: { text: 'A busca por perfil está sem a chave da Steam (ou ela foi recusada). Avise o dono do site.' },
+  fallback: { text: 'Não consegui buscar essa biblioteca agora. Tente de novo em instantes.' },
 };
 
 async function fetchLibrary(input) {
@@ -179,6 +182,7 @@ function libraryForm() {
     h('p', { class: 'hint' }, 'Sem login e sem senha. Funciona com perfis que deixam a lista de jogos pública.'),
     info && h('div', { class: 'err-box', role: 'alert' },
       h('b', {}, info.text),
+      err.code && h('small', { class: 'err-code' }, `código: ${err.code}`),
       info.help && h('div', { class: 'err-help' },
         h('p', {}, 'Se o perfil é seu, para liberar:'),
         h('ol', {},
