@@ -79,32 +79,40 @@ function noiseBuffer() {
   }
   return noiseBuf;
 }
-function clack(vol = 0.12) { // estalo seco de plástico/resina
+function tone(freq, end, dur, vol, type = 'sine') { // "toc" de corpo: madeira/resina, não plástico
+  const t = actx.currentTime;
+  const o = actx.createOscillator(); const g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(end, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(actx.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function burst(freq, q, dur, vol, type = 'bandpass') {
+  const t = actx.currentTime;
+  const src = actx.createBufferSource();
+  src.buffer = noiseBuffer();
+  const f = actx.createBiquadFilter();
+  f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f).connect(g).connect(actx.destination);
+  src.start(t); src.stop(t + dur + 0.02);
+}
+function clack(vol = 0.12) { // dado batendo em dado/mesa: estalo curto + "toc" grave levemente diferente a cada vez
   if (state.mute || !actx) return;
   try {
-    const t = actx.currentTime;
-    const src = actx.createBufferSource();
-    src.buffer = noiseBuffer();
-    const f = actx.createBiquadFilter();
-    f.type = 'bandpass'; f.frequency.value = 1400 + rnd() * 2600; f.Q.value = 1.8 + rnd();
-    const g = actx.createGain();
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045 + rnd() * 0.03);
-    src.connect(f).connect(g).connect(actx.destination);
-    src.start(t); src.stop(t + 0.1);
+    burst(900 + rnd() * 900, 0.8, 0.03 + rnd() * 0.02, vol * 1.3);
+    tone(260 + rnd() * 140, 120 + rnd() * 40, 0.05 + rnd() * 0.03, vol * 1.1);
   } catch { /* sem áudio */ }
 }
-function thump(vol = 0.25) { // batida na mesa: estalo + corpo grave
+function thump(vol = 0.25) { // batida forte na mesa: corpo grave + estalo + ressonância curta
   if (state.mute || !actx) return;
-  clack(Math.min(0.3, vol * 0.9));
   try {
-    const t = actx.currentTime;
-    const o = actx.createOscillator(); const g = actx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.14);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(g).connect(actx.destination);
-    o.start(t); o.stop(t + 0.18);
+    burst(500, 0.7, 0.07, vol * 1.6, 'lowpass');
+    burst(1300 + rnd() * 500, 0.9, 0.035, vol * 0.9);
+    tone(190 + rnd() * 40, 70, 0.13, vol * 1.2);
+    tone(410 + rnd() * 60, 200, 0.06, vol * 0.5, 'triangle');
   } catch { /* sem áudio */ }
 }
 
@@ -237,14 +245,16 @@ function createDie(pool) {
       const R0 = R;
       const { axis, ang } = matToAxisAngle(mmul(Rf, mT(R0)));
       const spinAxis = v3.norm([rnd() - 0.5, rnd() - 0.5, rnd() - 0.5 + 0.2]);
+      const spinAxis2 = v3.norm([rnd() - 0.5, rnd() - 0.5 + 0.3, rnd() - 0.5]); // segundo eixo: dá o giro "bagunçado" de dado de verdade
       const turns = 3 + Math.floor(rnd() * 2);
+      const turns2 = 2 + Math.floor(rnd() * 2);
       const dir = rnd() < 0.5 ? -1 : 1;
       let lastHop = -1;
       let lastFront = front;
       let lastClack = 0;
       await animate(DIE_MS, (t) => t, (t) => {
-        const e = 1 - Math.pow(1 - t, 3.2);
-        R = mmul(rotAxis(spinAxis, dir * Math.PI * 2 * turns * e), mmul(rotAxis(axis, ang * e), R0));
+        const e = 1 - Math.pow(1 - t, 2.6);
+        R = mmul(rotAxis(spinAxis2, -dir * Math.PI * 2 * turns2 * e), mmul(rotAxis(spinAxis, dir * Math.PI * 2 * turns * e), mmul(rotAxis(axis, ang * e), R0)));
         // pulos: altura em tempo real, estalo a cada batida
         hop = 0;
         HOPS.forEach(([s0, dur, amp], k) => {
