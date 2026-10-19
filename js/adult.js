@@ -105,6 +105,7 @@ function showAdultRoulette(genre) {
   state.genre = genre || state.genre || adultAll();
   const avail = availableFor(state.genre);
   state.pool = sample(avail, Math.min(state.adultQty || ADULT_DEFAULT_QTY, avail.length));
+  state.format = state.adultFmt;
   showSpin();
 }
 

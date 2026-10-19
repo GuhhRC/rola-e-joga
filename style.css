@@ -356,6 +356,11 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
+.qty { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.qty b { font-size: 22px; }
+.qty small { font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: lowercase; color: var(--muted); }
+.qty.die { border-color: rgba(var(--green-rgb), 0.5); }
+.qty.die small { color: var(--green); }
 .qty:hover:not(:disabled) { color: var(--green); border-color: var(--green); box-shadow: 0 0 20px rgba(var(--green-rgb), 0.18); }
 .qty:active:not(:disabled) { transform: scale(0.97); }
 .qty:disabled { opacity: 0.28; cursor: default; }
@@ -627,3 +632,9 @@ body.adult .chipbtn.on{color:#1a0508;background:var(--green);border-color:var(--
 .reel-name{width:min(100%,330px);min-height:44px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;font-size:17px;line-height:1.25;color:#d7e2db;overflow:hidden;transition:color .2s,text-shadow .2s}
 .reel-name.win{color:var(--green);text-shadow:0 0 18px var(--green-glow)}
 .err-code{display:block;margin-top:6px;font:500 10.5px var(--mono);color:var(--muted)}
+
+/* ---------- dado d20 ---------- */
+.die-box { display: flex; flex-direction: column; align-items: center; }
+.die-wrap { width: 100%; aspect-ratio: 1; max-width: 420px; }
+.die-canvas { width: 100%; height: 100%; display: block; }
+.die-box .reel-name { margin-top: 4px; }

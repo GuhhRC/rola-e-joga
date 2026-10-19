@@ -16,8 +16,9 @@ function openQty() {
     return;
   }
   const n = avail.length;
-  const buttons = QUANTITIES.map((q) => h('button', { class: 'qty', disabled: n < q, onclick: () => startSpin(q) }, String(q)));
-  const showAll = n < 100 && !QUANTITIES.includes(n);
+  const buttons = QTY_OPTIONS.map((o) => h('button', { class: 'qty' + (o.fmt === 'die' ? ' die' : ''), disabled: n < o.q, onclick: () => startSpin(o.q, o.fmt) },
+    h('b', {}, String(o.q)), h('small', {}, FORMATS[o.fmt].label)));
+  const showAll = n < 100 && !QTY_OPTIONS.some((o) => o.q === n);
 
   const sheet = h('div', { class: 'sheet', onclick: (e) => e.stopPropagation() },
     h('h3', {}, 'Quantos jogos na roleta?'),
@@ -32,9 +33,10 @@ function openQty() {
   openModal(sheet);
 }
 
-function startSpin(q) {
+function startSpin(q, fmt) {
   closeModal();
-  if (state.adult) state.adultQty = q;
+  state.format = resolveFormat(fmt, Math.min(q, availableFor(state.genre).length));
+  if (state.adult) { state.adultQty = q; state.adultFmt = state.format; }
   state.pool = sample(availableFor(state.genre), q);
   showSpin();
 }
@@ -45,8 +47,8 @@ function showSpin() {
   $back.hidden = false;
   const pool = state.pool;
   const n = pool.length;
-  const useWheel = n <= WHEEL_MAX;
-  const engine = useWheel ? createWheel(pool.map((g) => g.name)) : createReel(pool);
+  const fmt = resolveFormat(state.format, n);
+  const engine = FORMATS[fmt].make(pool);
 
   const head = state.adult
     ? adultHead(n)
@@ -61,7 +63,7 @@ function showSpin() {
       head,
       n,
       engine,
-      isReel: !useWheel,
+      isReel: fmt === 'reel',
       ctaText: 'Girar',
       renderResult: (idx, again) => gameResult(pool[idx], again),
     }),
