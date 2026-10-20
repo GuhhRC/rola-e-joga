@@ -51,5 +51,12 @@ jobs:
           git status --short | head -20
           if git diff --cached --quiet; then echo "nada mudou"; else
             git commit -m "Atualiza lista de jogos e guias"
-            git push || { echo "ERRO AO ENVIAR: confira Settings > Actions > General > Workflow permissions = Read and write"; exit 1; }
+            # se alguém (você) enviou arquivos enquanto o robô rodava, o GitHub recusa o envio; então puxa as novidades e tenta de novo
+            ok=0
+            for i in 1 2 3; do
+              if git push; then ok=1; break; fi
+              echo "envio recusado (tentativa $i); integrando mudanças novas e tentando de novo"
+              git pull --rebase -X theirs || { git rebase --abort 2>/dev/null; sleep 5; }
+            done
+            [ "$ok" = 1 ] || { echo "ERRO AO ENVIAR: confira Settings > Actions > General > Workflow permissions = Read and write"; exit 1; }
           fi
