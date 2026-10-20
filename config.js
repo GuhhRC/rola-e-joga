@@ -24,6 +24,8 @@ window.ROLA_CONFIG = {
     sideSlot: '', // ID do bloco vertical das laterais (só aparece em telas largas). Pode ficar vazio.
   },
 
+  gear: { name: 'ASUS', url: 'https://click.linksynergy.com/fs-bin/click?id=A9fL1JWbtDI&offerid=1940053.7&type=3&subid=0' },
+
   // Lojas parceiras do botão "Ver ofertas". Só aparecem as que tiverem url.
   // Use {name} para o nome do jogo e {id} para o appid da Steam no seu link de afiliado.
   // O formato exato vem do painel de cada programa de afiliados.
