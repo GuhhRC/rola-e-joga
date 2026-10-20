@@ -1,9 +1,0 @@
-Quando você tiver o link de afiliado da ASUS BR, abra o seu config.js e coloque
-esta linha dentro do ROLA_CONFIG (por exemplo logo antes de "affiliates:"):
-
-  gear: { name: 'ASUS', url: 'COLE_AQUI_O_LINK_DE_AFILIADO' },
-
-Opcional: escolher em quais gêneros aparece (ids da lista de gêneros):
-  gear: { name: 'ASUS', url: '...', genres: ['fps', 'corrida', 'mundo-aberto', 'rpg', 'soulslike'] },
-
-Sem url, o bloco simplesmente não aparece (pode subir os arquivos já, nada muda até você colar o link).
