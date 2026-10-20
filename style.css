@@ -638,3 +638,12 @@ body.adult .chipbtn.on{color:#1a0508;background:var(--green);border-color:var(--
 .die-wrap { width: 100%; aspect-ratio: 1; max-width: 420px; }
 .die-canvas { width: 100%; height: 100%; display: block; }
 .die-box .reel-name { margin-top: 4px; }
+
+/* ---------- bloco de parceiro ---------- */
+.gear{position:relative;display:flex;align-items:center;gap:12px;margin-top:14px;padding:14px 14px 14px 16px;border:1px dashed rgba(var(--green-rgb),.35);border-radius:14px;background:rgba(var(--green-rgb),.04)}
+.gear-tag{position:absolute;top:-8px;left:12px;padding:1px 8px;font:700 9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);background:var(--bg,#0a0a0a);border-radius:99px}
+.gear-txt{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.gear-txt b{font-size:13px;font-weight:700;color:var(--text)}
+.gear-txt span{font-size:12px;color:var(--muted);line-height:1.35}
+.gear-btn{flex:none;font:700 12px var(--mono);color:var(--green);border:1px solid var(--green);border-radius:10px;padding:9px 12px;text-decoration:none;white-space:nowrap}
+.gear-btn:hover{background:rgba(var(--green-rgb),.12)}
