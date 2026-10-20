@@ -301,7 +301,8 @@ function showGenreWheel() {
             h('button', { class: 'btn primary', onclick: () => pickGenre(g) }, 'Escolher quantos jogos'),
             h('button', { class: 'btn', style: 'grid-column:1/-1', onclick: again }, 'Girar de novo'),
           ),
-        ];
+          gearCard(g),
+        ].filter(Boolean);
       },
     }),
   );

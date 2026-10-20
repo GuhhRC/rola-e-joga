@@ -83,3 +83,21 @@ function updateAds() {
     }
   }
 }
+
+/* ---------- bloco de parceiro (equipamento gamer) ----------
+   Config em config.js → gear: { name, url, genres: [ids dos gêneros pesados] }. Sem url, não aparece.
+   Fica fora do +18, fora do modo gravação e nunca é colado em botões. */
+function gearCard(genre) {
+  const gear = CFG.gear;
+  if (!gear || !gear.url || state.adult || isLib()) return null;
+  if (genre && gear.genres && !gear.genres.includes(genre.id)) return null; // sem 'genres' no config = aparece em qualquer gênero
+  const line = 'Bom jogo pede máquina à altura.';
+  return h('aside', { class: 'gear hide-rec' },
+    h('span', { class: 'gear-tag' }, 'parceiro'),
+    h('div', { class: 'gear-txt' },
+      h('b', {}, line),
+      h('span', {}, `Notebooks, monitores e periféricos gamer ${gear.name || ''}.`.replace(' .', '.')),
+    ),
+    h('a', { class: 'gear-btn', href: gear.url, target: '_blank', rel: 'sponsored noopener' }, 'Ver ofertas'),
+  );
+}
