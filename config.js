@@ -24,6 +24,7 @@ window.ROLA_CONFIG = {
     sideSlot: '', // ID do bloco vertical das laterais (só aparece em telas largas). Pode ficar vazio.
   },
 
+  // Bloco "parceiro" (equipamento gamer) na tela do sorteio de gênero. Sem url, não aparece.
   gear: { name: 'ASUS', url: 'https://click.linksynergy.com/fs-bin/click?id=A9fL1JWbtDI&offerid=1940053.7&type=3&subid=0' },
 
   // Lojas parceiras do botão "Ver ofertas". Só aparecem as que tiverem url.
