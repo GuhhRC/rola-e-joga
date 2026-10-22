@@ -7,10 +7,10 @@ on:
   workflow_dispatch: # botão "Run workflow" para rodar na hora
     inputs:
       modo:
-        description: 'completo = busca na Steam (~1h15). teste-rapido = só testa o salvamento (segundos)'
+        description: 'completo = busca normal. descoberta = força procurar jogos novos em todos os gêneros agora (~25 min a mais). teste-rapido = só testa o salvamento (segundos)'
         type: choice
         default: completo
-        options: [completo, teste-rapido]
+        options: [completo, descoberta, teste-rapido]
 
 permissions:
   contents: write
@@ -29,8 +29,14 @@ jobs:
         with:
           node-version: 20
       - name: Buscar jogos na Steam
+        env:
+          # filtros mais folgados: entram jogos com 200+ avaliações (antes 500) e até 1000 por gênero (antes 600)
+          MIN_REVIEWS: '200'
+          PER_GENRE: '1000'
         run: |
-          if [ "${{ inputs.modo }}" = "teste-rapido" ]; then node scripts/update.mjs --seed-only; else node scripts/update.mjs; fi
+          if [ "${{ inputs.modo }}" = "teste-rapido" ]; then node scripts/update.mjs --seed-only
+          elif [ "${{ inputs.modo }}" = "descoberta" ]; then node scripts/update.mjs --discover
+          else node scripts/update.mjs; fi
       - name: Regenerar páginas e guias
         run: node scripts/build-pages.mjs
       - name: Guardar cópia dos dados (segurança)
