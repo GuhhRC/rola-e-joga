@@ -31,6 +31,9 @@ window.ROLA_CONFIG = {
   // Use {name} para o nome do jogo e {id} para o appid da Steam no seu link de afiliado.
   // O formato exato vem do painel de cada programa de afiliados.
   affiliates: [
+    // Hype Games (Rakuten, MID 53304). Por enquanto leva à página inicial; quando tiver o endereço da busca
+    // do site, troque 'search' por ele, com {name} no lugar do nome do jogo.
+    { name: 'Hype Games', search: 'https://hype.games/br', link: 'https://click.linksynergy.com/deeplink?id=A9fL1JWbtDI&mid=53304&murl={url}' },
     { name: 'Instant Gaming', url: '' },
     { name: 'Green Man Gaming', url: '' },
     { name: 'Fanatical', url: '' },
