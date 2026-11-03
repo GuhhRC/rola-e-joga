@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rola e Joga!</title>
+<meta name="description" content="Não sabe o que jogar? Gire a roleta e jogue o que ela mandar. Jogos da Steam por gênero ou da sua própria biblioteca.">
+<meta name="theme-color" content="#0a0a0a">
+<meta property="og:title" content="Rola e Joga!">
+<meta property="og:description" content="Não sabe o que jogar? Gire a roleta e jogue o que ela mandar. Jogos da Steam por gênero ou da sua própria biblioteca.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://guhhrc.github.io/rola-e-joga/">
+<meta property="og:site_name" content="Rola e Joga!">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:image" content="https://guhhrc.github.io/rola-e-joga/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rola e Joga!">
+<meta name="twitter:description" content="Não sabe o que jogar? Gire a roleta e jogue o que ela mandar. Jogos da Steam por gênero ou da sua própria biblioteca.">
+<meta name="twitter:image" content="https://guhhrc.github.io/rola-e-joga/og.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=13">
+</head>
+<body>
+<div class="stage" id="stage">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="icon-btn" id="btnBack" aria-label="Voltar" hidden>&larr;</button>
+      <div class="brand" aria-label="Rola e Joga!">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 13.2L12.00 4.40A8.8 8.8 0 0 1 16.40 5.58ZM12 13.2L19.62 8.80A8.8 8.8 0 0 1 20.80 13.20ZM12 13.2L19.62 17.60A8.8 8.8 0 0 1 16.40 20.82ZM12 13.2L12.00 22.00A8.8 8.8 0 0 1 7.60 20.82ZM12 13.2L4.38 17.60A8.8 8.8 0 0 1 3.20 13.20ZM12 13.2L4.38 8.80A8.8 8.8 0 0 1 7.60 5.58Z" fill="#2eea7a" opacity=".85"/><circle cx="12" cy="13.2" r="8.8" fill="none" stroke="#2eea7a" stroke-width="1.5"/><circle cx="12" cy="13.2" r="2.4" fill="#0a0a0a" stroke="#2eea7a" stroke-width="1.2"/><path d="M8.6 .9H15.4L12 7.2Z" fill="#2eea7a" stroke="#0a0a0a" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        <span class="word">ROLA<i>e</i><b>JOGA!</b></span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="btnSound" aria-label="Som ligado/desligado" title="Som">SOM</button>
+      <button class="icon-btn" id="btnLists" aria-label="Histórico e listas" title="Listas">LISTAS</button>
+      <button class="icon-btn" id="btnRec" aria-label="Modo gravação" title="Modo gravação">REC</button>
+    </div>
+  </header>
+
+  <main id="view" class="view" aria-live="polite"></main>
+
+  <div class="modal" id="modal" hidden></div>
+  <aside class="drawer" id="drawer" hidden></aside>
+  <button class="rec-exit" id="recExit" hidden>sair do modo gravação</button>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+<script>document.write('<script src="config.js?t='+Math.floor(Date.now()/600000)+'"><\/script>')</script>
+<script src="js/core.js?v=13"></script>
+<script src="js/wheel.js?v=13"></script>
+<script src="js/home.js?v=13"></script>
+<script src="js/game.js?v=13"></script>
+<script src="js/lists.js?v=13"></script>
+<script src="js/share.js?v=13"></script>
+<script src="js/ads.js?v=13"></script>
+<script src="js/controls.js?v=13"></script>
+<script src="js/adult.js?v=13"></script>
+<script src="js/die.js?v=13"></script>
+<script src="js/formats.js?v=13"></script>
+<script src="js/viewer.js?v=13"></script>
+<script src="js/main.js?v=13"></script>
+</body>
+</html>
