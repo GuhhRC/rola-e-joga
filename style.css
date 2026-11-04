@@ -647,3 +647,14 @@ body.adult .chipbtn.on{color:#1a0508;background:var(--green);border-color:var(--
 .gear-txt span{font-size:12px;color:var(--muted);line-height:1.35}
 .gear-btn{flex:none;font:700 12px var(--mono);color:var(--green);border:1px solid var(--green);border-radius:10px;padding:9px 12px;text-decoration:none;white-space:nowrap}
 .gear-btn:hover{background:rgba(var(--green-rgb),.12)}
+
+/* ---------- cartões de loja (Ver ofertas) ---------- */
+.offers{display:grid;gap:10px;margin-top:14px}
+.offer{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .15s,box-shadow .15s,transform .1s}
+.offer:hover{border-color:var(--green);box-shadow:0 0 20px rgba(var(--green-rgb),.15)}
+.offer:active{transform:scale(.98)}
+.offer-txt{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.offer-txt b{font-size:16px;font-weight:700}
+.offer-txt span{font-size:12px;color:var(--muted)}
+.offer-go{flex:none;font:700 12px var(--mono);color:var(--green);border:1px solid var(--green);border-radius:10px;padding:8px 12px}
+.sheet .fine{margin-top:10px}

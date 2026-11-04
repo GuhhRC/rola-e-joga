@@ -85,8 +85,11 @@ function statNodes(g) {
 /* Afiliados: cada loja tem `search` (busca no site da loja, com {name}) e, opcionalmente, `link`
    (deeplink de afiliado gerado no painel da Rakuten/Afilio, com {url} no lugar do destino).
    Sem `link`, abre a busca simples (sem comissão). O formato antigo `url` continua valendo. */
+// nome do jogo para a busca da loja: sem ™ ® © e espaços repetidos
+function searchName(n) { return String(n).replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim(); }
+
 function offerLinks(g) {
-  const name = encodeURIComponent(g.name);
+  const name = encodeURIComponent(searchName(g.name));
   return (CFG.affiliates || [])
     .map((a) => {
       if (!a) return null;
@@ -104,11 +107,18 @@ function offerLinks(g) {
 function openOffers(g) {
   const links = offerLinks(g);
   const sheet = h('div', { class: 'sheet', onclick: (e) => e.stopPropagation() },
-    h('h3', {}, 'Onde comprar'),
+    h('h3', {}, 'Procurar nas lojas'),
     h('p', {}, g.name),
     h('div', { class: 'offers' },
-      links.map((l) => h('a', { class: 'btn', href: l.href, target: '_blank', rel: (l.tracked ? 'sponsored ' : '') + 'noopener' }, l.name)),
+      links.map((l) => h('a', { class: 'offer', href: l.href, target: '_blank', rel: (l.tracked ? 'sponsored ' : '') + 'noopener' },
+        h('div', { class: 'offer-txt' },
+          h('b', {}, l.name),
+          h('span', {}, 'Buscar este jogo na loja'),
+        ),
+        h('span', { class: 'offer-go' }, 'Ver ↗'),
+      )),
     ),
+    h('p', { class: 'fine' }, 'Preço e disponibilidade são os da loja, na hora. Confira se a versão é para PC.'),
     links.some((l) => l.tracked) && h('p', { class: 'fine' }, 'Alguns links são de afiliados: podemos receber uma comissão se você comprar, sem custo extra para você.'),
     h('button', { class: 'link cancel', onclick: closeModal }, 'fechar'),
   );
