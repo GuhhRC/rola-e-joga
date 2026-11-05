@@ -27,6 +27,9 @@ window.ROLA_CONFIG = {
   // Bloco "parceiro" (equipamento gamer) na tela do sorteio de gênero. Sem url, não aparece.
   gear: { name: 'ASUS', url: 'https://click.linksynergy.com/fs-bin/click?id=A9fL1JWbtDI&offerid=1940053.7&type=3&subid=0' },
 
+  // Apoio voluntário (LivePix). Sem url, o link não aparece.
+  support: { name: 'LivePix', url: 'https://livepix.gg/romaneeconti' },
+
   // Lojas parceiras do botão "Ver ofertas". Só aparecem as que tiverem url.
   // Use {name} para o nome do jogo e {id} para o appid da Steam no seu link de afiliado.
   // O formato exato vem do painel de cada programa de afiliados.

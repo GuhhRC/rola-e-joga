@@ -658,3 +658,7 @@ body.adult .chipbtn.on{color:#1a0508;background:var(--green);border-color:var(--
 .offer-txt span{font-size:12px;color:var(--muted)}
 .offer-go{flex:none;font:700 12px var(--mono);color:var(--green);border:1px solid var(--green);border-radius:10px;padding:8px 12px}
 .sheet .fine{margin-top:10px}
+
+.foot-support{margin-top:10px;font-size:11px;color:var(--muted)}
+.foot-support a{color:var(--green);text-decoration:none;border-bottom:1px dashed rgba(var(--green-rgb),.5)}
+.foot-support a:hover{border-bottom-style:solid}
