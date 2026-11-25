@@ -69,8 +69,11 @@ function genreGrid(genres, extra) {
 }
 
 function catalogPanel() {
+  // com o filtro "Meu PC" ligado, os números dos gêneros mostram só o que o PC aguenta
+  const genres = state.pc && state.pc < 3 ? state.genres.map((g) => ({ ...g, count: availableFor(g).length })) : state.genres;
   return h('div', {},
-    genreGrid(state.genres),
+    pcPanel(),
+    genreGrid(genres),
     h('button', { class: 'undecided', onclick: showGenreWheel }, 'Estou indeciso · girar gêneros'),
   );
 }

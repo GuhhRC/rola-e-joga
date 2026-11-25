@@ -175,6 +175,7 @@ function detailNodes(d, g) {
   if (g.med) rows.push(['Tempo típico', `${g.med >= 600 ? Math.round(g.med / 60) : (g.med / 60).toFixed(1).replace('.', ',')} h (mediana)`]);
   if (d.recs) rows.push(['Recomendações', nf.format(d.recs)]);
   if (d.age) rows.push(['Idade', d.age + '+']);
+  if (d.pcl) rows.push(['Exigência do PC', `${PC_REQ_LABEL[d.pcl]} (estimativa)`]);
   if (d.ctrl) rows.push(['Controle', d.ctrl === 'full' ? 'Suporte total' : 'Suporte parcial']);
 
   const modes = (d.cats || []).filter((c) => !/coop|cooperativ/i.test(c) || /on-?line/i.test(c) || (d.cats || []).length < 3);

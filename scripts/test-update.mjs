@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const dir = await mkdtemp(path.join(os.tmpdir(), 'rej-'));
 Object.assign(process.env, { DATA_DIR: dir, TAG_DELAY_MS: '0', DETAIL_DELAY_MS: '0', SPY_DELAY_MS: '0', RATE_PAUSE_MS: '0', MAX_DETAIL: '8', MIN_REVIEWS: '500' });
-const { main, parseDetail, adultByTags, shotTokens } = await import('./update.mjs');
+const { main, parseDetail, adultByTags, shotTokens, pcLevel } = await import('./update.mjs');
 
 /* ---- regra de tags +18 ---- */
 assert.equal(adultByTags({ 'Sexual Content': 330, Hentai: 220, Nudity: 200, RPG: 137 }).ok, true, 'Celesphonia: sexual no topo');
@@ -16,12 +16,30 @@ assert.equal(adultByTags([]).ok, false, 'sem dados do SteamSpy');
 assert.equal(adultByTags({ Nudity: 500, Action: 100, NSFW: 80 }).ok, true, 'duas tags sexuais no topo');
 assert.equal(adultByTags({ Hentai: 10, Action: 5 }).ok, false, 'votos insuficientes');
 
+
 /* ---- parseDetail ---- */
 const base = { type: 'game', name: 'G', release_date: { coming_soon: false, date: '10 de mar. de 2020' }, genres: [{ id: '1', description: 'Ação' }], categories: [{ id: 38, description: 'Co-op online' }, { id: 2, description: 'Um jogador' }], platforms: { windows: true, mac: false, linux: true }, is_free: false, short_description: 'Oi  mundo', screenshots: [{ path_thumbnail: 'http://x/a.jpg?t=1' }], price_overview: { final_formatted: 'R$ 50,00', initial_formatted: 'R$ 100,00', discount_percent: 50 } };
 assert.equal(parseDetail({ ...base, type: 'dlc' }, '2026-01-01').block, 'not_game');
 assert.equal(parseDetail({ ...base, release_date: { coming_soon: true } }, '2026-01-01').block, 'unreleased');
 assert.equal(parseDetail({ ...base, content_descriptors: { ids: [3] } }, '2026-01-01').block, 'adult');
 assert.equal(parseDetail({ ...base, platforms: { windows: false } }, '2026-01-01').block, 'no_windows');
+
+/* ---- pcLevel (filtro "Meu PC") ---- */
+const rq = (min) => ({ pc_requirements: { minimum: min } });
+assert.equal(pcLevel({}), 0);
+assert.equal(pcLevel({ pc_requirements: [] }), 0);
+assert.equal(pcLevel(rq('<ul><li><strong>Memória:</strong> 2 GB de RAM</li><li>Placa de vídeo: Intel HD 4000</li></ul>')), 1);
+assert.equal(pcLevel(rq('<ul><li>Memória: 512 MB de RAM</li></ul>')), 1);
+assert.equal(pcLevel(rq('<ul><li>Memória: 8 GB de RAM</li><li>Placa de vídeo: GeForce GTX 660</li></ul>')), 2);
+assert.equal(pcLevel(rq('<ul><li>Memória: 4 GB de RAM</li><li>Placa de vídeo: GTX 960</li></ul>')), 2);
+assert.equal(pcLevel(rq('<ul><li>Memória: 8 GB de RAM</li><li>Placa de vídeo: NVIDIA RTX 2060</li></ul>')), 3);
+assert.equal(pcLevel(rq('<ul><li>Memória: 16 GB de RAM</li></ul>')), 3);
+assert.equal(pcLevel(rq('<ul><li>Placa de vídeo: 2 GB VRAM</li><li>Memória: 4 GB de RAM</li></ul>')), 1); // VRAM não conta como RAM
+assert.equal(pcLevel(rq('Requer um PC com Windows 10')), 0);
+assert.equal(parseDetail({ ...base, pc_requirements: { minimum: '<li>Memória: 4 GB de RAM</li>' } }, '2026-01-01').slim.pcl, 1);
+assert.equal(parseDetail({ ...base, pc_requirements: [] }, '2026-01-01').detail.pcl, 0);
+
+
 let p = parseDetail({ ...base, supported_languages: 'Inglês, Português do Brasil<strong>*</strong>, Francês' }, '2026-01-01');
 assert.equal(p.detail.pt, 2);
 p = parseDetail({ ...base, supported_languages: 'English, Portuguese - Brazil' }, '2026-01-01');
