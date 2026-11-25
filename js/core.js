@@ -138,7 +138,7 @@ function libFiltered() {
 }
 
 function sourceGames() {
-  return isLib() ? libFiltered() : state.games.filter((g) => !state.played.has(g.id));
+  return isLib() ? libFiltered() : state.games.filter((g) => !state.played.has(g.id) && (state.adult || pcOk(g)));
 }
 
 function availableFor(genre) {

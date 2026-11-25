@@ -12,6 +12,7 @@ que compartilham o mesmo escopo; a ORDEM está em `index.html` (`main.js` é sem
 | Quantidade, giro, afiliados, detalhes, card do resultado, roleta de gêneros | `js/game.js` | `openQty`, `showSpin`, `offerLinks`, `detailNodes`, `gameResult`, `showGenreWheel` |
 | Modal, listas (histórico/já joguei/desafios) | `js/lists.js` | `openModal`, `renderLists` |
 | Card 1080x1920, texto e link de compartilhar | `js/share.js` | `makeCard`, `shareText`, `shareCard` |
+| Filtro "Meu PC" (nível Leve/Médio/Forte, detecção pela GPU) | `js/pc.js` | `pcOk`, `setPc`, `guessPcLevel`, `pcPanel` |
 | Anúncios (desligados) | `js/ads.js` | `initAds`, `updateAds` |
 | Modo gravação, teclado | `js/controls.js` | `setRec`, listener `keydown` |
 | Modo +18 escondido | `js/adult.js` | `arm`, `onSecretTap`, `enterAdult`, `exitAdult`, `showAdultRoulette`, `adultHead` |
@@ -32,7 +33,7 @@ O `index.html` chama `style.css?v=N` e `js/*.js?v=N`. Ao entregar mudança de CS
 
 ## Regras que não podem quebrar
 - NUNCA sobrescrever `config.js` do usuário (tem `apiUrl` preenchido). Mudanças de config vão como instrução, não como arquivo.
-- Entregar ao usuário um zip só com os arquivos alterados (ele sobe no GitHub à mão). Nunca incluir `config.js` nem `data/`.
+- Entrega: se a sessão tiver permissão de escrita no GitHub, enviar numa branch (o usuário dá o merge); senão, zip só com os arquivos alterados (ele sobe à mão). Nunca incluir `config.js` nem `data/`.
 - O +18: botão `.secret` invisível sobre o @ do rodapé, só recebe toque depois do toque duplo no logo (`body.armed`); antes disso o toque vai para o Instagram.
   No +18: sem histórico, listas, compartilhar nem afiliados. Sem borrão em capas e prints por padrão (`adultBlurCovers: true` / `adultBlurShots: true` no config ligam).
 - Instagram padrão em `CREATOR.url` (`js/core.js`); pode ser trocado em `config.js → creator`.
@@ -58,3 +59,11 @@ link do resultado · +18 escondido e catálogo +18 · Instagram, +18 com roleta 
 - `js/die.js`: d20 em canvas (3D calculado à mão), nomes + número nas faces (opostas somam 21), som de dado sintetizado (respeita SOM). Só aceita 20 jogos. Funciona no +18 (`state.adultFmt` guarda o formato).
 - `game.js`: `startSpin(q, fmt)`, `showSpin` usa `resolveFormat(state.format, n)`.
 - Cache: `?v=8` em todos os scripts/estilo do index.html.
+
+## Filtro "Meu PC" (nov/2026)
+- O robô grava `pcl` em cada jogo (índice `games.json` e detalhes): 1 leve, 2 médio, 3 pesado, 0 = não deu para saber. `pcLevel(d)` em `scripts/update.mjs` lê os requisitos MÍNIMOS da Steam (RAM e nome da placa) — é estimativa.
+- Jogos sem `pcl` na lista entram na fila de detalhes (preenchimento gradual, até ~3000 por execução; leva ~2 dias para os ~6,6 mil).
+- App: `state.pc` (0 = sem filtro), guardado em `rs.pc`. `sourceGames()` aplica `pcOk`; +18 e biblioteca não filtram. Jogo sem `pcl` sempre entra.
+- "Detectar" lê o nome da GPU via WebGL (`WEBGL_debug_renderer_info`); no celular ou sem WebGL só avisa.
+- Cache: `?v=16` em todos os scripts/estilo do index.html.
+- Limpeza: removidos `ads.js`, `game.js`, `build-pages.mjs` (cópias soltas na raiz) e `correcao-ofertas/`. Os arquivos valem só dentro de `js/` e `scripts/`.

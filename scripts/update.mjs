@@ -134,6 +134,36 @@ export function shotTokens(list) {
   return out;
 }
 
+/* ---------- exigência do jogo para o PC (filtro "Meu PC") ----------
+   Lê os requisitos MÍNIMOS da loja e devolve um nível estimado:
+   1 = leve (roda em notebook simples), 2 = médio (ROG Ally, Steam Deck, placa de entrada), 3 = pesado, 0 = não deu para saber.
+   É uma estimativa: usa a memória RAM mínima e o nome da placa de vídeo citada. */
+export function pcLevel(d) {
+  const req = d?.pc_requirements;
+  const raw = req && !Array.isArray(req) ? String(req.minimum || '') : '';
+  if (!raw) return 0;
+  const t = raw.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  let ram = null;
+  for (const m of t.matchAll(/(?:mem[óo]ria|memory|ram)[^0-9]{0,25}(\d+(?:[.,]\d+)?)\s*(gb|mb)\b/gi)) {
+    const seg = m[0];
+    const before = t.slice(Math.max(0, m.index - 12), m.index);
+    if (/v[ií]deo|vram|dedic|gr[áa]fic/i.test(seg) || /v[ií]deo|vram|dedic/i.test(before)) continue;
+    const v = parseFloat(m[1].replace(',', '.'));
+    ram = /mb/i.test(m[2]) ? v / 1024 : v;
+    break;
+  }
+  if (ram === null) {
+    const m = t.match(/(\d+(?:[.,]\d+)?)\s*(gb|mb)\s*(?:de\s*)?ram\b/i);
+    if (m) ram = /mb/i.test(m[2]) ? parseFloat(m[1].replace(',', '.')) / 1024 : parseFloat(m[1].replace(',', '.'));
+  }
+  const heavy = /rtx|\brx\s?(5[5-9]\d|[6-9]\d{3}|5[789]0)|gtx\s?(10[6-8]0|1660|9[78]0)|r9\s?(290|390|fury)|radeon\s?vii|arc\s?a[57]/i.test(t);
+  const mid = /gtx\s?\d{3,4}|geforce\s?(gt|gtx)|\bgt\s?[67]\d\d|\brx\s?\d{3,4}|radeon\s?(hd\s?[67]\d{3}|r[79])/i.test(t);
+  if (heavy || (ram !== null && ram >= 12)) return 3;
+  if ((ram !== null && ram >= 6) || mid) return 2;
+  if (ram !== null) return 1;
+  return 0;
+}
+
 /* ---------- interpretação da resposta da loja ---------- */
 export function parseDetail(d, today) {
   if (!d || d.type !== 'game') return { block: 'not_game' };
@@ -180,6 +210,7 @@ export function parseDetail(d, today) {
     age: +d.required_age > 0 ? +d.required_age : undefined,
     ctrl: d.controller_support || undefined,
     dlc: Array.isArray(d.dlc) && d.dlc.length ? d.dlc.length : undefined,
+    pcl: pcLevel(d),
   };
   for (const k of Object.keys(detail)) {
     const v = detail[k];
@@ -189,7 +220,7 @@ export function parseDetail(d, today) {
     detail,
     genres,
     adultSlim: slimBase,
-    slim: { name: d.name || undefined, year: year ? +year : undefined, free: d.is_free ? 1 : undefined, price: price?.f, pt },
+    slim: { name: d.name || undefined, year: year ? +year : undefined, free: d.is_free ? 1 : undefined, price: price?.f, pt, pcl: detail.pcl },
   };
 }
 
@@ -206,6 +237,7 @@ function slimOf(rec) {
     price: rec.price,
     pt: rec.pt,
     med: rec.med,
+    pcl: rec.pcl,
   };
   for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === null) delete o[k];
   return o;
@@ -272,7 +304,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (!g?.id || !g.name || !Array.isArray(g.genres)) continue;
     records.set(g.id, {
       id: g.id, name: g.name, genres: new Set(g.genres),
-      approval: g.approval, reviews: g.reviews, year: g.year, free: g.free, price: g.price, pt: g.pt, med: g.med,
+      approval: g.approval, reviews: g.reviews, year: g.year, free: g.free, price: g.price, pt: g.pt, med: g.med, pcl: g.pcl,
     });
   }
   const touch = (id, name) => {
@@ -377,7 +409,7 @@ export async function main(argv = process.argv.slice(2)) {
   const isBlocked = (id) => blocked[id] && (!blocked[id].until || blocked[id].until > today);
   const stale = (d) => !d || (Date.now() - new Date(d.at)) / 864e5 > S.detailMaxAgeDays;
   const cand = [...records.values()]
-    .filter((r) => !isBlocked(r.id) && stale(details.get(r.id)))
+    .filter((r) => !isBlocked(r.id) && (stale(details.get(r.id)) || r.pcl === undefined)) // r.pcl ausente: ainda não classificamos a exigência do jogo
     .sort((a, b) => {
       const da = details.get(a.id);
       const db = details.get(b.id);
