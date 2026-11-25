@@ -33,6 +33,9 @@ jobs:
           # filtros mais folgados: entram jogos com 200+ avaliações (antes 500) e até 1000 por gênero (antes 600)
           MIN_REVIEWS: '200'
           PER_GENRE: '1000'
+          # varredura geral do SteamSpy (acha jogos fora das listas por tag) e mais tags por execução (jogo novo precisa de gênero)
+          ALL_PAGES_PER_RUN: '20'
+          MAX_SPY: '1500'
         run: |
           if [ "${{ inputs.modo }}" = "teste-rapido" ]; then node scripts/update.mjs --seed-only
           elif [ "${{ inputs.modo }}" = "descoberta" ]; then node scripts/update.mjs --discover

@@ -9,6 +9,7 @@
  *
  * Etapas:
  *   1) Descoberta (SteamSpy, por tag): lista candidatos com avaliações. Roda se passou 7 dias (ou --discover).
+ *   1b) Varredura geral (SteamSpy, todos os apps): acha jogos fora das listas por tag; retomável (ALL_PAGES_PER_RUN, ALL_EVERY_DAYS).
  *   2) Detalhes (loja Steam, em português do Brasil): preço em R$, idiomas, devs, prints, etc.
  *      É incremental: cada execução busca no máximo MAX_DETAIL jogos novos ou desatualizados,
  *      então a base cresce ao longo dos dias sem estourar o limite da Steam.
@@ -53,6 +54,8 @@ function settings() {
     adultPerTag: num(e.ADULT_PER_TAG, 800),
     maxAdult: num(e.MAX_ADULT, 500),
     adultShotsPerRun: num(e.ADULT_SHOTS_PER_RUN, 250), // quantos jogos +18 já confirmados ganham prints por execução
+    allPagesPerRun: num(e.ALL_PAGES_PER_RUN, 20), // varredura geral do SteamSpy: páginas (de 1000 apps) por execução; 0 desliga
+    allEveryDays: num(e.ALL_EVERY_DAYS, 14), // depois de varrer tudo, espera esses dias para recomeçar
     smallGenreBelow: num(e.SMALL_GENRE_BELOW, 300), // gênero com menos jogos que isso ganha filtro de avaliações mais folgado
   };
 }
@@ -404,6 +407,48 @@ export async function main(argv = process.argv.slice(2)) {
     log('descoberta pulada (tudo em dia)');
   }
 
+  /* 1b) varredura geral (SteamSpy, lista de todos os apps, 1000 por página).
+     As listas por tag acabam em ~1000 jogos por tag; esta varredura acha os jogos que ficaram de fora.
+     É retomável: `meta.allPage` guarda a próxima página; quando as páginas acabam, `meta.allDoneAt` marca o fim do ciclo.
+     Só entram na fila jogos com avaliações suficientes e que ainda não conhecemos; o resto (DLC, software...) a loja descarta nos detalhes. */
+  const allDue = (meta.allPage | 0) > 0 || !meta.allDoneAt || (Date.now() - new Date(meta.allDoneAt)) / 864e5 >= S.allEveryDays;
+  if (S.allPagesPerRun > 0 && allDue) {
+    let page = meta.allPage | 0;
+    let pages = 0;
+    let added = 0;
+    log(`== varredura geral (SteamSpy) a partir da página ${page} ==`);
+    while (pages < S.allPagesPerRun) {
+      if (timeUp()) { log('tempo esgotado na varredura'); break; }
+      if (spyCalls++ > 0) await sleep(S.tagDelayMs);
+      let data;
+      try {
+        data = await getJson(`https://steamspy.com/api.php?request=all&page=${page}`);
+      } catch (e) {
+        log(`varredura: página ${page} falhou (${e.message}); continua na próxima execução`);
+        break;
+      }
+      if (!data || !Object.keys(data).length) {
+        meta.allPage = 0;
+        meta.allDoneAt = new Date().toISOString();
+        log('varredura completa: recomeça depois do intervalo');
+        break;
+      }
+      for (const x of parseSpyList(data, S.minReviews, S.minApproval)) {
+        const b = blocked[x.id];
+        if (records.has(x.id) || adult.has(x.id) || isRejected(x.id) || (b && (!b.until || b.until > today))) continue;
+        const r = touch(x.id, x.name);
+        r.reviews = x.total;
+        r.approval = x.approval;
+        if (x.med) r.med = x.med;
+        added++;
+      }
+      page++;
+      pages++;
+      meta.allPage = page;
+    }
+    log(`varredura: ${pages} páginas, ${added} candidatos novos (próxima página: ${meta.allPage | 0})`);
+  }
+
   /* 2) detalhes da loja */
   log('== detalhes (loja Steam) ==');
   const isBlocked = (id) => blocked[id] && (!blocked[id].until || blocked[id].until > today);
@@ -597,7 +642,7 @@ export async function main(argv = process.argv.slice(2)) {
   const tagToGenre = new Map(genres.flatMap((g) => tagsOf(g).map((t) => [t.toLowerCase(), g.id])));
   const needSpy = [...records.values()]
     .filter((r) => details.has(r.id) && (!details.get(r.id).tags || r.reviews == null))
-    .sort((a, b) => (a.reviews == null ? 0 : 1) - (b.reviews == null ? 0 : 1) || (b.reviews || 0) - (a.reviews || 0))
+    .sort((a, b) => (a.genres.size ? 1 : 0) - (b.genres.size ? 1 : 0) || (a.reviews == null ? 0 : 1) - (b.reviews == null ? 0 : 1) || (b.reviews || 0) - (a.reviews || 0)) // sem gênero primeiro: só as tags dão gênero a quem a loja não classifica
     .slice(0, S.maxSpy);
   let spied = 0;
   for (const [k, rec] of needSpy.entries()) {
@@ -643,7 +688,13 @@ export async function main(argv = process.argv.slice(2)) {
     if (adult.get(r.id)?.v && adult.get(r.id).f === 2 && !curatedIds.has(r.id)) records.delete(r.id);
     else if (isBlocked(r.id) && !curatedIds.has(r.id)) records.delete(r.id);
     else if (!curatedIds.has(r.id) && !details.has(r.id)) { pending.set(r.id, r); records.delete(r.id); }
-    else if (!r.genres.size) records.delete(r.id);
+    else if (!r.genres.size) {
+      const d = details.get(r.id);
+      if (d && !d.tags && !curatedIds.has(r.id)) continue; // ainda sem tags: guarda os detalhes e o gênero vem na próxima execução
+      records.delete(r.id);
+      details.delete(r.id);
+      if (!curatedIds.has(r.id)) blocked[r.id] = { r: 'no_genre', until: addDays(today, 30) }; // não gasta a fila de detalhes de novo agora
+    }
   }
   const prevCount = (prev.games || []).length;
   if (prevCount && records.size < prevCount * 0.5) {
