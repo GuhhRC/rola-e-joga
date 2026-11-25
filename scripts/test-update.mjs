@@ -82,6 +82,8 @@ const store = {
 globalThis.fetch = async (url) => {
   const u = String(url);
   const ok = (o) => ({ ok: true, status: 200, json: async () => o });
+  if (u.includes('request=all&page=0')) return ok({ 50: { appid: 50, name: 'Fora das tags', positive: 900, negative: 100 }, 10: { appid: 10, name: 'App10', positive: 900, negative: 100 }, 51: { appid: 51, name: 'Poucas avaliacoes', positive: 5, negative: 0 } });
+  if (u.includes('request=all&page=')) return ok({});
   if (u.includes('request=tag&tag=Action')) {
     const o = {};
     for (const id of [10, 11, 12, 13, 14, 15]) o[id] = { appid: id, name: 'App' + id, positive: 900, negative: 100, median_forever: 120 };
@@ -124,8 +126,10 @@ assert.equal(blocked[13].r, 'no_store_page');
 assert.equal(blocked[14].r, 'unreleased');
 const sh = JSON.parse(await readFile(path.join(dir, 'details', '10.json'), 'utf8'));
 assert.ok(sh['10'].tags.includes('Terror'));
+assert.ok(!(51 in blocked) && !games.games.some((g) => g.id === 51), 'varredura geral respeita o mínimo de avaliações');
+assert.ok(games.meta.allDoneAt && !games.meta.allPage, 'varredura chegou ao fim e marcou o ciclo');
 const pend = JSON.parse(await readFile(path.join(dir, 'pending.json'), 'utf8'));
-assert.deepEqual(pend.map((x) => x.id), [31], 'candidato não buscado fica pendente');
+assert.deepEqual(pend.map((x) => x.id).sort((a, b) => a - b), [31, 50], 'candidatos não buscados ficam pendentes (50 veio da varredura geral)');
 assert.ok(!ids.includes(32), 'jogo mal avaliado do alias fica de fora');
 const ad = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 const adIds = ad.games.map((g) => g.id).sort((a, b) => a - b);
@@ -155,7 +159,7 @@ const g2 = JSON.parse(await readFile(path.join(dir, 'games.json'), 'utf8'));
 assert.ok(!g2.games.some((g) => g.id === 10), 'jogo com tags sexuais no topo sai da roleta normal');
 const ad3 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 assert.ok(ad3.games.some((g) => g.id === 10 && g.f === 2), 'e entra no +18');
-assert.equal(calls.store - before, 2, 'consulta o pendente 31 e reavalia a entrada antiga 99');
+assert.equal(calls.store - before, 3, 'consulta os pendentes 31 e 50 e reavalia a entrada antiga 99');
 const ad2 = JSON.parse(await readFile(path.join(dir, 'adult.json'), 'utf8'));
 assert.ok(!ad2.games.some((g) => g.id === 99) && ad2.rejected['99'], 'entrada antiga sem selo da Steam é removida');
 /* ---- prints do +18 para quem já estava confirmado sem prints ---- */

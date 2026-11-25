@@ -67,3 +67,8 @@ link do resultado · +18 escondido e catálogo +18 · Instagram, +18 com roleta 
 - "Detectar" lê o nome da GPU via WebGL (`WEBGL_debug_renderer_info`); no celular ou sem WebGL só avisa.
 - Cache: `?v=16` em todos os scripts/estilo do index.html.
 - Limpeza: removidos `ads.js`, `game.js`, `build-pages.mjs` (cópias soltas na raiz) e `correcao-ofertas/`. Os arquivos valem só dentro de `js/` e `scripts/`.
+
+## Varredura geral (nov/2026)
+- Por que a lista parou em ~6,6 mil: cada tag do SteamSpy devolve no máximo ~1000 jogos. A etapa 1b de `scripts/update.mjs` percorre `request=all&page=N` (1000 apps por página, 1 página/min), `ALL_PAGES_PER_RUN`=20 por execução, e retoma de `meta.allPage`; ao acabar grava `meta.allDoneAt` e só recomeça depois de `ALL_EVERY_DAYS`=14.
+- Entram na fila só jogos com `MIN_REVIEWS` e `MIN_APPROVAL` que ainda não conhecemos; a loja descarta DLC/software nos detalhes. Candidatos sem gênero ficam em `pending.json` até os detalhes e as tags (`MAX_SPY`=1500) darem gênero.
+- Jogo com detalhes mas sem gênero após as tags vai para `blocked.json` como `no_genre` por 30 dias (antes era buscado de novo toda execução).
