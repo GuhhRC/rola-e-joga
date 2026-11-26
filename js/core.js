@@ -134,7 +134,7 @@ const LIB_FILTERS = [
 function libFiltered() {
   if (!state.lib) return [];
   const f = LIB_FILTERS.find((x) => x[0] === state.lib.filter) || LIB_FILTERS[0];
-  return state.lib.games.filter(f[2]);
+  return state.lib.games.filter((g) => pcOk(g) && f[2](g));
 }
 
 function sourceGames() {
