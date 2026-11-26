@@ -78,3 +78,12 @@ function pcPanel() {
     ),
   );
 }
+
+// no catálogo o painel fica na aba "Minha biblioteca"; aqui só um aviso quando o filtro está ligado
+function pcNote() {
+  const cur = PC_LEVELS.find((l) => l.id === state.pc);
+  if (!cur || cur.id >= 3) return null;
+  return h('div', { class: 'pc-note-line hide-rec' },
+    `💻 Só jogos que rodam no PC ${cur.label.toLowerCase()} · `,
+    h('button', { class: 'link', onclick: () => setSource('library') }, 'mudar'));
+}

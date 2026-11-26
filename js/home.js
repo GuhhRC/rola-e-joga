@@ -72,7 +72,7 @@ function catalogPanel() {
   // com o filtro "Meu PC" ligado, os números dos gêneros mostram só o que o PC aguenta
   const genres = state.pc && state.pc < 3 ? state.genres.map((g) => ({ ...g, count: availableFor(g).length })) : state.genres;
   return h('div', {},
-    pcPanel(),
+    pcNote(),
     genreGrid(genres),
     h('button', { class: 'undecided', onclick: showGenreWheel }, 'Estou indeciso · girar gêneros'),
   );
@@ -135,14 +135,15 @@ function libraryPanel() {
   if (state.libBusy) {
     return h('div', { class: 'state-msg' }, h('div', { class: 'loader' }), 'Buscando a biblioteca…');
   }
-  if (!state.lib) return libraryForm();
+  if (!state.lib) return h('div', {}, pcPanel(), libraryForm());
 
   const lib = state.lib;
-  const counts = Object.fromEntries(LIB_FILTERS.map(([k, , fn]) => [k, lib.games.filter(fn).length]));
+  const counts = Object.fromEntries(LIB_FILTERS.map(([k, , fn]) => [k, lib.games.filter((g) => pcOk(g) && fn(g)).length]));
   const avail = libFiltered().length;
   const genres = homeGenres();
 
   return h('div', {},
+    pcPanel(),
     h('div', { class: 'lib-head' },
       h('div', { class: 'lib-name' }, h('b', {}, lib.profile.name), h('small', {}, `${lib.games.length} jogos`)),
       h('button', { class: 'link', onclick: () => { state.lib = null; showHome(); } }, 'trocar perfil'),
@@ -160,7 +161,7 @@ function libraryPanel() {
           ? h('p', { class: 'hint' }, 'Os jogos desta biblioteca ainda não têm gênero na nossa base. A lista cresce a cada atualização.')
           : null,
       )
-      : h('p', { class: 'hint' }, 'Nenhum jogo nesse filtro. Experimente outro.'),
+      : h('p', { class: 'hint' }, state.pc && state.pc < 3 ? 'Nenhum jogo nesse filtro com o nível de PC escolhido. Experimente outro filtro ou outro nível.' : 'Nenhum jogo nesse filtro. Experimente outro.'),
   );
 }
 
