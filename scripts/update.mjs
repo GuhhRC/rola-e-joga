@@ -421,12 +421,25 @@ export async function main(argv = process.argv.slice(2)) {
       if (timeUp()) { log('tempo esgotado na varredura'); break; }
       if (spyCalls++ > 0) await sleep(S.tagDelayMs);
       let data;
-      try {
-        data = await getJson(`https://steamspy.com/api.php?request=all&page=${page}`);
-      } catch (e) {
-        log(`varredura: página ${page} falhou (${e.message}); continua na próxima execução`);
-        break;
+      let err = null;
+      // o SteamSpy às vezes responde texto ("Connection failed...") em vez de JSON: espera e tenta de novo
+      for (let t = 0; t < 3; t++) {
+        if (t > 0) await sleep(S.tagDelayMs);
+        try { data = await getJson(`https://steamspy.com/api.php?request=all&page=${page}`); err = null; break; } catch (e) { err = e; if (e instanceof RateLimited) break; }
       }
+      if (err) {
+        meta.allFails = { ...(meta.allFails || {}) };
+        const n = (meta.allFails[page] | 0) + 1;
+        meta.allFails[page] = n;
+        if (n < 3) { log(`varredura: página ${page} falhou (${err.message}); tentativa ${n}/3, volta nela na próxima execução`); break; }
+        log(`varredura: página ${page} falhou 3 execuções seguidas; pulando`);
+        delete meta.allFails[page];
+        page++;
+        pages++;
+        meta.allPage = page;
+        continue;
+      }
+      if (meta.allFails?.[page]) { meta.allFails = { ...meta.allFails }; delete meta.allFails[page]; }
       if (!data || !Object.keys(data).length) {
         meta.allPage = 0;
         meta.allDoneAt = new Date().toISOString();
